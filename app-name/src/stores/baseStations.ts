@@ -4,10 +4,18 @@ import type { BaseStation, Antenna } from '../types.ts'
 export const useBaseStationStore = defineStore('baseStations', {
     state: () => ({
         stations: [] as BaseStation[],     // 所有基站数据
-        selectedId: null as string | null  // 当前选中的基站ID
+        selectedId: null as string | null,  // 当前选中的基站ID
+        isCreatingMode: false  // 新增：是否处于创建模式
     }),
 
     actions: {
+        toggleCreatingMode() {
+            this.isCreatingMode = !this.isCreatingMode
+        },
+
+        setCreatingMode(mode: boolean) {
+            this.isCreatingMode = mode
+        },
         // 添加新基站
         addStation(station: BaseStation) {
             this.stations.push(station)
@@ -55,7 +63,21 @@ export const useBaseStationStore = defineStore('baseStations', {
                     station.antennas.splice(index, 1)
                 }
             }
-        }
+        },
+        toggleCreatingMode() {
+            this.isCreatingMode = !this.isCreatingMode
+        },
+
+        setCreatingMode(mode: boolean) {
+            this.isCreatingMode = mode
+        },
+        // 清空所有基站数据
+        clearAllStations() {
+            this.stations = []
+            this.selectedId = null
+            this.isCreatingMode = false  // 清空时也退出创建模式
+            window.dispatchEvent(new CustomEvent('clearAllStationsFromMap'))
+        },
     },
 
     getters: {

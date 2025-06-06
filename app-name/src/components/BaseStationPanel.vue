@@ -23,10 +23,35 @@
         <p>总基站数：{{ store.totalStations }}</p>
         <p>总天线数：{{ store.totalAntennas }}</p>
       </div>
+      <div class="action-buttons">
+        <button
+            @click="toggleCreateMode"
+            :class="{ active: store.isCreatingMode }"
+            class="btn-create"
+        >
+          {{ store.isCreatingMode ? '🚫 取消创建' : '➕ 创建宏站' }}
+        </button>
+
+        <button
+            @click="clearAllStations"
+            class="btn-clear"
+            :disabled="store.totalStations === 0"
+        >
+          🗑️ 清空所有
+        </button>
+      </div>
+
     </div>
 
     <!-- 右侧基站详情 -->
     <div class="details" v-if="selected && isExpanded && showDetails">
+      <!-- 详情面板顶部工具栏 -->
+      <div class="details-header">
+        <h3>{{ selected.name }}</h3>
+        <button @click="hideDetails" class="btn-collapse" title="收起详情">
+          ✕
+        </button>
+      </div>
       <h3>基站信息</h3>
 
       <!-- 基站基本信息编辑 -->
@@ -57,8 +82,35 @@
         </label>
 
         <div class="coordinate-info">
-          <p>经度：{{ selected.longitude.toFixed(6) }}°</p>
-          <p>纬度：{{ selected.latitude.toFixed(6) }}°</p>
+          <label>
+            经度：
+            <input
+                type="number"
+                v-model.number="selected.longitude"
+                @input="updateStationPosition"
+                min="-180"
+                max="180"
+                step="0.000001"
+                placeholder="经度坐标"
+                class="coordinate-input"
+            />
+            <span class="unit">°</span>
+          </label>
+
+          <label>
+            纬度：
+            <input
+                type="number"
+                v-model.number="selected.latitude"
+                @input="updateStationPosition"
+                min="-90"
+                max="90"
+                step="0.000001"
+                placeholder="纬度坐标"
+                class="coordinate-input"
+            />
+            <span class="unit">°</span>
+          </label>
         </div>
 
         <!-- 高度快速设置按钮 -->
@@ -192,11 +244,7 @@ function togglePanel() {
   }
 }
 
-// 修改：选择基站并显示详情
-function selectAndShowDetails(id: string) {
-  store.selectStation(id)
-  showDetails.value = true
-}
+
 // 添加新天线（默认参数）
 function addAntenna() {
   if (!selected.value) return
@@ -247,7 +295,20 @@ function deleteStation() {
     store.removeStation(selected.value.id)
   }
 }
+// 切换创建模式
+function toggleCreateMode() {
+  store.toggleCreatingMode()
+}
 
+// 清空所有基站
+function clearAllStations() {
+  if (store.totalStations === 0) return
+
+  if (confirm(`确定要删除所有 ${store.totalStations} 个基站吗？此操作不可恢复！`)) {
+    store.clearAllStations()
+    showDetails.value = false
+  }
+}
 // 通过事件通知地图组件飞行到基站
 function flyToStation() {
   if (!selected.value) return
@@ -259,8 +320,46 @@ function flyToStation() {
       height: selected.value.height
     }
   }))
+
 }
-</script>
+// 隐藏详情面板
+function hideDetails() {
+  showDetails.value = false
+}
+
+// 修改选择基站函数，添加动画延迟
+function selectAndShowDetails(id: string) {
+  store.selectStation(id)
+
+  // 如果当前已显示详情，先隐藏再显示新的
+  if (showDetails.value) {
+    showDetails.value = false
+    setTimeout(() => {
+      showDetails.value = true
+    }, 200) // 等待隐藏动画完成
+  } else {
+    showDetails.value = true
+  }
+}
+// 更新基站位置（包含经纬度变化）
+function updateStationPosition() {
+  if (!selected.value) return
+
+  store.updateStation(selected.value.id, {
+    longitude: selected.value.longitude,
+    latitude: selected.value.latitude
+  })
+
+  // 通知地图组件更新基站位置
+  window.dispatchEvent(new CustomEvent('updateStationPosition', {
+    detail: {
+      stationId: selected.value.id,
+      longitude: selected.value.longitude,
+      latitude: selected.value.latitude,
+      height: selected.value.height
+    }
+  }))
+}</script>
 
 <style scoped>
 /* 新增：切换按钮样式 */
@@ -292,7 +391,7 @@ function flyToStation() {
 }
 
 .toggle-btn.expanded {
-  left: 240px; /* 列表宽度 */
+  left: 200px; /* 列表宽度 */
 }
 
 /* 修改：面板样式 */
@@ -305,16 +404,7 @@ function flyToStation() {
   transition: all 0.3s;
 }
 
-.list {
-  width: 240px;
-  border-right: 1px solid #ddd;
-  padding: 15px;
-  overflow-y: auto;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(5px);
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
-  height: 100vh;
-}
+
 
 .details {
   width: 380px;
@@ -350,7 +440,7 @@ function flyToStation() {
 }
 
 .list {
-  width: 240px;
+  width: 200px;
   border-right: 1px solid #ddd;
   padding: 15px;
   overflow-y: auto;
@@ -474,21 +564,6 @@ function flyToStation() {
   font-size: 12px;
 }
 
-.coordinate-info {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.coordinate-info p {
-  margin: 0;
-  font-size: 12px;
-  color: #666;
-  background: #f5f5f5;
-  padding: 6px 8px;
-  border-radius: 3px;
-}
 
 .height-presets {
   margin-top: 12px;
@@ -640,5 +715,167 @@ function flyToStation() {
 
 .btn-fly:hover {
   background: #1976d2;
+}
+.coordinate-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.coordinate-info label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #555;
+}
+
+.coordinate-input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 12px;
+  font-family: 'Courier New', monospace; /* 等宽字体便于阅读数字 */
+}
+
+.coordinate-input:focus {
+  border-color: #2196f3;
+  outline: none;
+  box-shadow: 0 0 3px rgba(33, 150, 243, 0.3);
+}
+
+.unit {
+  color: #666;
+  font-size: 12px;
+  min-width: 15px;
+}
+/* 滑动动画 */
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.slide-right-enter-from {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+.slide-right-leave-to {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+.slide-right-enter-to,
+.slide-right-leave-from {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+/* 详情面板头部 */
+.details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e3f2fd;
+  background: linear-gradient(135deg, #f5f5f5 0%, #e8f4fd 100%);
+  margin: -15px -15px 20px -15px;
+  padding: 15px 15px 12px 15px;
+}
+
+.details-header h3 {
+  margin: 0;
+  color: #1976d2;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.btn-collapse {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(244, 67, 54, 0.1);
+  color: #f44336;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  font-weight: bold;
+}
+
+.btn-collapse:hover {
+  background: rgba(244, 67, 54, 0.2);
+  transform: scale(1.1);
+}
+
+/* 优化详情面板样式 */
+.details {
+  width: 380px;
+  padding: 15px;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(8px);
+  box-shadow: -4px 0 15px rgba(0, 0, 0, 0.15);
+  height: 100vh;
+  border-left: 1px solid #e0e0e0;
+  position: relative;
+}
+
+/* 让基站列表项点击时有更好的反馈 */
+.list li {
+  padding: 12px 14px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  background: white;
+  position: relative;
+  overflow: hidden;
+}
+
+.list li::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(33, 150, 243, 0.1), transparent);
+  transition: left 0.5s;
+}
+
+.list li:hover::before {
+  left: 100%;
+}
+
+.list li:hover {
+  background: #f8f9fa;
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.list li.active {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border-color: #2196f3;
+  box-shadow: 0 3px 12px rgba(33, 150, 243, 0.3);
+  transform: translateX(6px);
+}
+
+.list li.active::after {
+  content: '▶';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #2196f3;
+  font-size: 12px;
 }
 </style>

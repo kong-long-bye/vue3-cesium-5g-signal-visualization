@@ -30,6 +30,8 @@ onMounted(() => {
   })
   // 处理地图点击事件 - 添加基站
   viewer.screenSpaceEventHandler.setInputAction((event) => {
+    // 检查是否处于创建模式
+    if (!store.isCreatingMode) return
     const cartesian = viewer.scene.pickPosition(event.position)
     if (!cartesian) return
 
@@ -185,7 +187,25 @@ onMounted(() => {
       })
     })
   })
-})
+// 监听基站位置更新事件
+  window.addEventListener('updateStationPosition', (event: any) => {
+    const { stationId, longitude, latitude, height } = event.detail
+    const entity = viewer.entities.getById(stationId)
+    const poleEntity = viewer.entities.getById(`${stationId}_pole`)
+
+    if (entity) {
+      // 更新基站位置
+      entity.position = Cesium.Cartesian3.fromDegrees(longitude, latitude, height)
+    }
+
+    if (poleEntity && poleEntity.polyline) {
+      // 更新支撑杆位置
+      poleEntity.polyline.positions = [
+        Cesium.Cartesian3.fromDegrees(longitude, latitude, 0),
+        Cesium.Cartesian3.fromDegrees(longitude, latitude, height)
+      ]
+    }
+  })})
 </script>
 
 <style scoped>
