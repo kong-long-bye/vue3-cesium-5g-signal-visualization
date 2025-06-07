@@ -7,10 +7,131 @@ import { ref, onMounted, watch } from 'vue'
 import * as Cesium from 'cesium'
 import { useBaseStationStore } from '../stores/baseStations'
 import { nanoid } from 'nanoid'
-
+import { calculateBestSignal,  SignalStrengthResult } from '../utils/propagationModels'
 const store = useBaseStationStore()
 const cesiumContainer = ref<HTMLElement | null>(null)
 let viewer: Cesium.Viewer
+
+
+// 显示信号强度信息窗口
+function showSignalStrengthInfo(
+    lon: number,
+    lat: number,
+    height: number,
+    results: SignalStrengthResult[]
+) {
+  // 移除之前的查询结果
+  const existingEntity = viewer.entities.getById('signal-query-result')
+  if (existingEntity) {
+    viewer.entities.remove(existingEntity)
+  }
+
+  // 创建信息内容
+  const bestSignal = results[0]
+  const stationName = store.stations.find(s => s.id === bestSignal.stationId)?.name || '未知基站'
+  // 构建简洁的信息文本，避免过长导致截断
+  let infoText = `📍 信号强度查询\n`
+  infoText += `坐标: ${lat.toFixed(6)}°, ${lon.toFixed(6)}°\n\n`
+  infoText += `🏆 最强信号:\n`
+  infoText += `基站: ${stationName}\n`
+  infoText += `RSSI: ${bestSignal.rssi.toFixed(2)} dBm\n`
+  infoText += `距离: ${bestSignal.distance.toFixed(1)} m\n`
+  infoText += `路径损耗: ${bestSignal.pathLoss.toFixed(2)} dB\n`
+  infoText += `传播模型: ${bestSignal.model}\n`
+
+  if (results.length > 1) {
+    infoText += `\n📊 其他信号源 (${results.length - 1}个):\n`
+    results.slice(1, 4).forEach((result, index) => {
+      const station = store.stations.find(s => s.id === result.stationId)
+      infoText += `${index + 2}. ${station?.name}: ${result.rssi.toFixed(1)} dBm\n`
+    })
+  }
+
+  // 在地图上显示查询点和信息
+  viewer.entities.add({
+    id: 'signal-query-result',
+    position: Cesium.Cartesian3.fromDegrees(lon, lat, height + 2),
+    point: {
+      pixelSize: 12,
+      color: getSignalStrengthColor(bestSignal.rssi),
+      outlineColor: Cesium.Color.WHITE,
+      outlineWidth: 2,
+      heightReference: Cesium.HeightReference.NONE
+    },
+    label: {
+      text: infoText,
+      font: '11px monospace, Microsoft YaHei, sans-serif', // 使用等宽字体，确保对齐
+      pixelOffset: new Cesium.Cartesian2(20, -80), // 适当调整位置
+      fillColor: Cesium.Color.WHITE,
+      outlineColor: Cesium.Color.BLACK,
+      outlineWidth: 1,
+      style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+      // 背景设置 - 关键：给足够空间
+      backgroundColor: Cesium.Color.fromCssColorString('rgba(0, 0, 0, 0.9)'),
+      backgroundPadding: new Cesium.Cartesian2(25, 15), // 增大内边距，确保文本有足够空间
+      showBackground: true,
+      // 显示控制
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      // 对齐方式
+      horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+      verticalOrigin: Cesium.VerticalOrigin.TOP,
+      // 固定尺寸和位置
+      heightReference: Cesium.HeightReference.NONE,
+      scale: 1.0,
+      // 添加这些属性确保文本完整显示
+      eyeOffset: new Cesium.Cartesian3(0, 0, 0),
+      pixelOffsetScaleByDistance: undefined, // 禁用像素偏移缩放
+      scaleByDistance: undefined, // 禁用距离缩放
+      translucencyByDistance: undefined, // 禁用距离透明度
+
+    }
+  })
+
+  // 3秒后自动隐藏查询结果
+  setTimeout(() => {
+    const entity = viewer.entities.getById('signal-query-result')
+    if (entity) {
+      viewer.entities.remove(entity)
+    }
+  }, 5000)
+}
+
+// 根据信号强度返回颜色
+function getSignalStrengthColor(rssi: number): Cesium.Color {
+  if (rssi > -60) return Cesium.Color.GREEN        // 极强信号
+  if (rssi > -70) return Cesium.Color.LIME         // 强信号
+  if (rssi > -80) return Cesium.Color.YELLOW       // 中等信号
+  if (rssi > -90) return Cesium.Color.ORANGE       // 弱信号
+  if (rssi > -100) return Cesium.Color.RED         // 很弱信号
+  return Cesium.Color.GRAY                         // 极弱/无信号
+}
+
+// 简单信息显示函数
+function showInfoWindow(lon: number, lat: number, message: string) {
+  const existingEntity = viewer.entities.getById('info-message')
+  if (existingEntity) {
+    viewer.entities.remove(existingEntity)
+  }
+
+  viewer.entities.add({
+    id: 'info-message',
+    position: Cesium.Cartesian3.fromDegrees(lon, lat, 10),
+    label: {
+      text: message,
+      font: '12px sans-serif',
+      fillColor: Cesium.Color.YELLOW,
+      outlineColor: Cesium.Color.BLACK,
+      outlineWidth: 2,
+      style: Cesium.LabelStyle.FILL_AND_OUTLINE
+    }
+  })
+
+  setTimeout(() => {
+    const entity = viewer.entities.getById('info-message')
+    if (entity) viewer.entities.remove(entity)
+  }, 7000)
+}
+
 
 onMounted(() => {
   if (!cesiumContainer.value) return
@@ -91,7 +212,29 @@ onMounted(() => {
     store.selectStation(id)
 
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
+  // 添加右键点击事件 - 信号强度查询
+  viewer.screenSpaceEventHandler.setInputAction((event) => {
+    const cartesian = viewer.scene.pickPosition(event.position)
+    if (!cartesian) return
 
+    // 转换为经纬度坐标
+    const carto = Cesium.Cartographic.fromCartesian(cartesian)
+    const lon = Cesium.Math.toDegrees(carto.longitude)
+    const lat = Cesium.Math.toDegrees(carto.latitude)
+    const height = 1.5 // 默认接收点高度1.5米
+
+    // 计算所有基站天线的信号强度
+    const signalResults = calculateBestSignal(store.stations, lat, lon, height)
+
+    if (signalResults.length === 0) {
+      showInfoWindow(lon, lat, '没有可用的基站信号')
+      return
+    }
+
+    // 显示信号强度查询结果
+    showSignalStrengthInfo(lon, lat, height, signalResults)
+
+  }, Cesium.ScreenSpaceEventType.RIGHT_CLICK)
   // 监听基站数据变化，实时更新3D显示
   watch(() => store.stations, (newStations) => {
     newStations.forEach(station => {
@@ -205,7 +348,15 @@ onMounted(() => {
         Cesium.Cartesian3.fromDegrees(longitude, latitude, height)
       ]
     }
-  })})
+  })
+
+}
+
+
+
+)
+
+
 </script>
 
 <style scoped>

@@ -43,6 +43,9 @@ export const useBaseStationStore = defineStore('baseStations', {
                 if (this.selectedId === id) {
                     this.selectedId = null
                 }
+                // 触发自定义事件，通知界面更新
+                window.dispatchEvent(new CustomEvent('removeStationFromMap', { detail: { stationId: id } }))
+
             }
         },
 
@@ -64,13 +67,8 @@ export const useBaseStationStore = defineStore('baseStations', {
                 }
             }
         },
-        toggleCreatingMode() {
-            this.isCreatingMode = !this.isCreatingMode
-        },
 
-        setCreatingMode(mode: boolean) {
-            this.isCreatingMode = mode
-        },
+
         // 清空所有基站数据
         clearAllStations() {
             this.stations = []

@@ -147,7 +147,17 @@
                 <option>多天线</option>
               </select>
             </label>
-
+            <label>
+              工作频率：
+              <input
+                  type="number"
+                  v-model.number="antenna.frequency"
+                  min="800"
+                  max="6000"
+                  step="1"
+                  title="工作频率 MHz"
+              />MHz
+            </label>
             <label>
               方向角：
               <input
@@ -202,6 +212,62 @@
               />dBi
             </label>
           </div>
+          <!-- 传播模型选择 - 新增 -->
+          <div class="propagation-model-section">
+
+            <label class="model-label">
+              传播模型：
+              <select
+                  v-model="antenna.propagationModel.type"
+                  @change="updatePropagationModel(antenna)"
+                  class="model-select"
+              >
+                <option value="free-space">Free-Space 自由空间</option>
+                <option value="cost-231-hata">COST-231-Hata 城市</option>
+                <option value="itu-indoor">ITU 室内</option>
+                <option value="ray-tracing">Ray-Tracing 射线追踪</option>
+              </select>
+            </label>
+            <!-- 模型描述信息 -->
+            <div class="model-description">
+              <small>{{ getModelDescription(antenna.propagationModel.type) }}</small>
+            </div>
+            <!-- 模型参数配置（如果有的话） -->
+            <div v-if="antenna.propagationModel.parameters" class="model-parameters">
+
+              <div v-if="antenna.propagationModel.type === 'cost-231-hata'" class="param-group">
+                <label>
+                  城市类型：
+                  <select v-model.number="antenna.propagationModel.parameters.cityType">
+                    <option :value="0">中小城市</option>
+                    <option :value="1">大城市</option>
+                  </select>
+                </label>
+              </div>
+              <div v-if="antenna.propagationModel.type === 'itu-indoor'" class="param-group">
+                <label>
+                  墙体损耗：
+                  <input
+                      type="number"
+                      v-model.number="antenna.propagationModel.parameters.wallLoss"
+                      min="0"
+                      max="30"
+                      step="1"
+                  />dB
+                </label>
+                <label>
+                  楼层数：
+                  <input
+                      type="number"
+                      v-model.number="antenna.propagationModel.parameters.floors"
+                      min="1"
+                      max="50"
+                      step="1"
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
         </div>
 
         <button @click="addAntenna" class="btn-add">➕ 添加天线</button>
@@ -229,7 +295,7 @@ import { computed ,ref} from 'vue'
 import { useBaseStationStore } from '../stores/baseStations'
 import { nanoid } from 'nanoid'
 import type { Antenna } from '../types'
-
+import { PROPAGATION_MODELS, getPropagationModel } from '../utils/propagationModels'
 const store = useBaseStationStore()
 const selected = computed(() => store.selectedStation)
 // 添加新的响应式变量
@@ -245,9 +311,11 @@ function togglePanel() {
 }
 
 
-// 添加新天线（默认参数）
+// 修改添加天线函数，设置默认传播模型
 function addAntenna() {
   if (!selected.value) return
+
+  const defaultModel = getPropagationModel('free-space')!
 
   const newAntenna: Antenna = {
     id: nanoid(),
@@ -256,7 +324,9 @@ function addAntenna() {
     elevation: 0,
     height: 5,
     power: 20,
-    gain: 15
+    gain: 15,
+    frequency: 1800, // 默认1800MHz
+    propagationModel: { ...defaultModel }
   }
 
   store.addAntennaToStation(selected.value.id, newAntenna)
@@ -359,7 +429,24 @@ function updateStationPosition() {
       height: selected.value.height
     }
   }))
-}</script>
+
+}
+
+function updatePropagationModel(antenna: Antenna) {
+  // 更新传播模型
+  const model = getPropagationModel(antenna.propagationModel.type)
+  if (model) {
+    antenna.propagationModel = { ...model }
+  }
+
+}
+// 获取模型描述
+function getModelDescription(type: string): string {
+  const model = getPropagationModel(type)
+  return model?.description || ''
+}
+
+</script>
 
 <style scoped>
 /* 新增：切换按钮样式 */
@@ -877,5 +964,71 @@ function updateStationPosition() {
   transform: translateY(-50%);
   color: #2196f3;
   font-size: 12px;
+}
+.propagation-model-section {
+  margin-top: 15px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.model-label {
+  font-weight: 600;
+  color: #1976d2;
+}
+
+.model-select {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 2px solid #e3f2fd;
+  border-radius: 4px;
+  background: white;
+  font-size: 12px;
+}
+
+.model-select:focus {
+  border-color: #2196f3;
+  outline: none;
+}
+
+.model-description {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #f8f9ff;
+  border-left: 3px solid #2196f3;
+  border-radius: 0 4px 4px 0;
+}
+
+.model-description small {
+  color: #555;
+  line-height: 1.4;
+  font-size: 11px;
+}
+
+.model-parameters {
+  margin-top: 10px;
+  padding: 8px;
+  background: #fafafa;
+  border-radius: 4px;
+}
+
+.param-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.param-group label {
+  font-size: 11px;
+  color: #666;
+}
+
+.param-group input,
+.param-group select {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 11px;
 }
 </style>
