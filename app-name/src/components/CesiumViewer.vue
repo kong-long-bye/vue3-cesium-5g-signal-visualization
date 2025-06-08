@@ -275,11 +275,11 @@ onMounted(() => {
 
   // 监听删除基站事件
   window.addEventListener('removeStationFromMap', (event: any) => {
-    const { stationId } = event.detail
+    const { stationId,station } = event.detail
     const entity = viewer.entities.getById(stationId)
     const poleEntity = viewer.entities.getById(`${stationId}_pole`)
-    const station = store.stations.find(s => s.id === stationId)
 
+    console.log(station)
     // 清除该基站所有天线的射线可视化
     if (station) {
       station.antennas.forEach(antenna => {
@@ -295,6 +295,11 @@ onMounted(() => {
     const { longitude, latitude, height } = event.detail
     viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, height + 200),
+      orientation: {
+        heading: Cesium.Math.toRadians(0),
+        pitch: Cesium.Math.toRadians(-30),
+        roll: 0.0
+      },
       duration: 2.0
     })
   })
@@ -363,6 +368,7 @@ onMounted(() => {
         rayVisualization.renderAntenna(station, antenna)
       } else {
         // 清除天线射线
+
         rayVisualization.clearAntenna(antennaId)
       }
     }
@@ -386,7 +392,11 @@ onMounted(() => {
       ])
     }
   })
-
+  // 监听删除天线可视化事件
+  window.addEventListener('removeAntennaVisualization', (event: any) => {
+    const { antennaId } = event.detail
+    rayVisualization.clearAntenna(antennaId)
+  })
 }
 )
 

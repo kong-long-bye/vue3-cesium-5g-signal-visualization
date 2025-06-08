@@ -38,13 +38,14 @@ export const useBaseStationStore = defineStore('baseStations', {
         removeStation(id: string) {
             const index = this.stations.findIndex(s => s.id === id)
             if (index !== -1) {
+                const stationToRemove = this.stations[index]
                 this.stations.splice(index, 1)
                 // 如果删除的是当前选中的基站，清除选中状态
                 if (this.selectedId === id) {
                     this.selectedId = null
                 }
                 // 触发自定义事件，通知界面更新
-                window.dispatchEvent(new CustomEvent('removeStationFromMap', { detail: { stationId: id } }))
+                window.dispatchEvent(new CustomEvent('removeStationFromMap', { detail: { stationId: id,station: stationToRemove  } }))
 
             }
         },
@@ -61,6 +62,16 @@ export const useBaseStationStore = defineStore('baseStations', {
         removeAntennaFromStation(stationId: string, antennaId: string) {
             const station = this.stations.find(s => s.id === stationId)
             if (station) {
+                const antennaIndex = station.antennas.findIndex(a => a.id === antennaId)
+                if (antennaIndex !== -1) {
+                    // 先触发清除可视化事件
+                    window.dispatchEvent(new CustomEvent('removeAntennaVisualization', {
+                        detail: {
+                            stationId,
+                            antennaId
+                        }
+                    }))
+                }
                 const index = station.antennas.findIndex(a => a.id === antennaId)
                 if (index !== -1) {
                     station.antennas.splice(index, 1)

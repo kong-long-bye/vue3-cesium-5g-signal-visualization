@@ -135,7 +135,7 @@
                 (基站+{{ antenna.height }}m = {{ selected.height + antenna.height }}m)
               </span>
             </h5>
-            <button @click="removeAntenna(antenna.id)" class="btn-remove">🗑️</button>
+            <button @click="removeAntenna(antenna.id)" class="btn-remove">🗑️删除天线</button>
           </div>
 
           <!-- 天线参数配置 -->
@@ -390,6 +390,7 @@ import { useBaseStationStore } from '../stores/baseStations'
 import { nanoid } from 'nanoid'
 import type { Antenna } from '../types'
 import { PROPAGATION_MODELS, getPropagationModel } from '../utils/propagationModels'
+import * as Cesium from "cesium";
 const store = useBaseStationStore()
 const selected = computed(() => store.selectedStation)
 // 添加新的响应式变量
@@ -437,7 +438,7 @@ function addAntenna() {
       verticalBeamWidth: 30,
       horizontalSteps: 12,
       verticalSteps: 30,
-      maxDistance: 5000,
+      maxDistance: 1000,
       transparency: 0.6,
       showContours: false,
 
@@ -452,6 +453,8 @@ function removeAntenna(antennaId: string) {
   if (!selected.value) return
 
   if (confirm('确定要删除这个天线吗？')) {
+    //清理可视化
+
     store.removeAntennaFromStation(selected.value.id, antennaId)
   }
 }
@@ -502,7 +505,12 @@ function flyToStation() {
     detail: {
       longitude: selected.value.longitude,
       latitude: selected.value.latitude,
-      height: selected.value.height
+      height: selected.value.height,
+      orientation: {
+        heading: Cesium.Math.toRadians(0),
+        pitch: Cesium.Math.toRadians(-30),
+        roll: 0.0
+      }
     }
   }))
 

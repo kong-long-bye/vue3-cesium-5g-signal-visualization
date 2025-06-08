@@ -252,6 +252,9 @@ export class AntennaRayVisualization {
     /**
      * 创建单个扇形实体
      */
+    /**
+     * 创建单个扇形实体 - 使用Polyline
+     */
     private createSectorEntity(
         station: BaseStation,
         antenna: Antenna,
@@ -270,51 +273,71 @@ export class AntennaRayVisualization {
         const config = antenna.visualization
         const color = getSignalStrengthColor(rssi, config.transparency)
 
-        // 生成扇形的边界点
-        const positions: Cesium.Cartesian3[] = []
-        const angleSteps = 8 // 每个扇形用8个点来近似
+        // 1. 创建径向线（从内圈到外圈）
+        const radialLines = 5 // 每个扇形创建5条径向线
+        for (let r = 0; r < radialLines; r++) {
+            const az = azStart + (azEnd - azStart) * (r / (radialLines - 1))
+            const positions: Cesium.Cartesian3[] = []
 
-        // 内弧
-        for (let i = 0; i <= angleSteps; i++) {
-            const az = azStart + (azEnd - azStart) * (i / angleSteps)
-            const bottomPoint = calculateSphericalPoint(
-                station.longitude, station.latitude, antennaHeight ,
-                innerRadius, az, elStart
-            )
-            const topPoint = calculateSphericalPoint(
-                station.longitude, station.latitude, antennaHeight,
-                innerRadius, az, elEnd
-            )
-            positions.push(bottomPoint, topPoint)
-        }
+            // 从内半径到外半径创建线条
+            const distanceSteps = 10
+            for (let d = 0; d <= distanceSteps; d++) {
+                const distance = innerRadius + (outerRadius - innerRadius) * (d / distanceSteps)
+                const elevation = elStart + (elEnd - elStart) * (d / distanceSteps)
 
-        // 外弧
-        for (let i = angleSteps; i >= 0; i--) {
-            const az = azStart + (azEnd - azStart) * (i / angleSteps)
-            const topPoint = calculateSphericalPoint(
-                station.longitude, station.latitude, antennaHeight,
-                outerRadius, az, elEnd
-            )
-            const bottomPoint = calculateSphericalPoint(
-                station.longitude, station.latitude, antennaHeight,
-                outerRadius, az, elStart
-            )
-            positions.push(topPoint, bottomPoint)
-        }
-
-        // 创建多边形实体
-        const entity = this.viewer.entities.add({
-            id: `antenna-ray-${antenna.id}-${hIndex}-${vIndex}-${dIndex}`,
-            polygon: {
-                hierarchy: positions,
-                material: color,
-                outline: false,
-                height: antennaHeight,  // 使用天线的实际高度
-                heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
+                const point = calculateSphericalPoint(
+                    station.longitude, station.latitude, antennaHeight,
+                    distance, az, elevation
+                )
+                positions.push(point)
             }
-        })
 
-        this.entities.push(entity)
+            // 创建径向线实体
+            const radialEntity = this.viewer.entities.add({
+                id: `antenna-radial-${antenna.id}-${hIndex}-${vIndex}-${dIndex}-${r}`,
+                polyline: {
+                    positions: positions,
+                    width: 1,
+                    material: color,
+                    clampToGround: false
+                }
+            })
+
+            this.entities.push(radialEntity)
+        }
+
+        // 2. 创建弧形线（连接相同距离的点）
+        const arcLines = 3 // 创建3条弧形线
+        for (let a = 0; a < arcLines; a++) {
+            const distance = innerRadius + (outerRadius - innerRadius) * (a / (arcLines - 1))
+            const elevation = elStart + (elEnd - elStart) * (a / (arcLines - 1))
+            const positions: Cesium.Cartesian3[] = []
+
+            // 沿着方位角创建弧形
+            const angleSteps = 10
+            for (let i = 0; i <= angleSteps; i++) {
+                const az = azStart + (azEnd - azStart) * (i / angleSteps)
+
+                const point = calculateSphericalPoint(
+                    station.longitude, station.latitude, antennaHeight,
+                    distance, az, elevation
+                )
+                positions.push(point)
+            }
+
+            // 创建弧形线实体
+            const arcEntity = this.viewer.entities.add({
+                id: `antenna-arc-${antenna.id}-${hIndex}-${vIndex}-${dIndex}-${a}`,
+                polyline: {
+                    positions: positions,
+                    width: 1,
+                    material: color,
+                    clampToGround: false
+                }
+            })
+
+            this.entities.push(arcEntity)
+        }
     }
 
     /**
