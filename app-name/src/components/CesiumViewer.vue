@@ -7,7 +7,8 @@ import { ref, onMounted, watch } from 'vue'
 import * as Cesium from 'cesium'
 import { useBaseStationStore } from '../stores/baseStations'
 import { nanoid } from 'nanoid'
-import { calculateBestSignal,  SignalStrengthResult } from '../utils/propagationModels'
+import{type SignalStrengthResult} from '../types.ts'
+import { calculateBestSignal,   } from '../utils/propagationModels'
 const store = useBaseStationStore()
 const cesiumContainer = ref<HTMLElement | null>(null)
 let viewer: Cesium.Viewer
@@ -30,9 +31,9 @@ function showSignalStrengthInfo(
   const bestSignal = results[0]
   const stationName = store.stations.find(s => s.id === bestSignal.stationId)?.name || '未知基站'
   // 构建简洁的信息文本，避免过长导致截断
-  let infoText = `📍 信号强度查询\n`
+  let infoText = `信号强度查询\n`
   infoText += `坐标: ${lat.toFixed(6)}°, ${lon.toFixed(6)}°\n\n`
-  infoText += `🏆 最强信号:\n`
+  infoText += `最强信号:\n`
   infoText += `基站: ${stationName}\n`
   infoText += `RSSI: ${bestSignal.rssi.toFixed(2)} dBm\n`
   infoText += `距离: ${bestSignal.distance.toFixed(1)} m\n`
@@ -93,7 +94,7 @@ function showSignalStrengthInfo(
     if (entity) {
       viewer.entities.remove(entity)
     }
-  }, 5000)
+  }, 3000)
 }
 
 // 根据信号强度返回颜色
@@ -142,15 +143,15 @@ onMounted(() => {
   })
   // 设置默认视角到重庆市
   viewer.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(106.5, 29.5, 50000), // 重庆坐标，高度50km
+    destination: Cesium.Cartesian3.fromDegrees(106.6148619 , 29.5391032, 200), // 重庆坐标，高度50km
     orientation: {
       heading: Cesium.Math.toRadians(0),     // 正北方向
-      pitch: Cesium.Math.toRadians(-45),     // 俯视角度45度
+      pitch: Cesium.Math.toRadians(-90),     // 俯视角度45度
       roll: 0.0
     }
   })
   // 处理地图点击事件 - 添加基站
-  viewer.screenSpaceEventHandler.setInputAction((event) => {
+  viewer.screenSpaceEventHandler.setInputAction((event:any) => {
     // 检查是否处于创建模式
     if (!store.isCreatingMode) return
     const cartesian = viewer.scene.pickPosition(event.position)
@@ -213,7 +214,7 @@ onMounted(() => {
 
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
   // 添加右键点击事件 - 信号强度查询
-  viewer.screenSpaceEventHandler.setInputAction((event) => {
+  viewer.screenSpaceEventHandler.setInputAction((event:any) => {
     const cartesian = viewer.scene.pickPosition(event.position)
     if (!cartesian) return
 
@@ -243,23 +244,25 @@ onMounted(() => {
 
       if (entity) {
         // 更新基站位置和标签
-        entity.position = Cesium.Cartesian3.fromDegrees(
-            station.longitude,
-            station.latitude,
-            station.height
+        entity.position = new Cesium.ConstantPositionProperty(
+            Cesium.Cartesian3.fromDegrees(
+                station.longitude,
+                station.latitude,
+                station.height
+            )
         )
 
         if (entity.label) {
-          entity.label.text = `${station.name}\n高度: ${station.height}m`
+          entity.label.text = new Cesium.ConstantProperty(`${station.name}\n高度: ${station.height}m`)
         }
       }
 
       // 更新支撑杆
       if (poleEntity && poleEntity.polyline) {
-        poleEntity.polyline.positions = [
+        poleEntity.polyline.positions = new Cesium.ConstantProperty([
           Cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, 0),
           Cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, station.height)
-        ]
+        ])
       }
     })
   }, { deep: true })
@@ -338,15 +341,15 @@ onMounted(() => {
 
     if (entity) {
       // 更新基站位置
-      entity.position = Cesium.Cartesian3.fromDegrees(longitude, latitude, height)
+      entity.position =new Cesium.ConstantPositionProperty (Cesium.Cartesian3.fromDegrees(longitude, latitude, height))
     }
 
     if (poleEntity && poleEntity.polyline) {
       // 更新支撑杆位置
-      poleEntity.polyline.positions = [
+      poleEntity.polyline.positions =new Cesium.ConstantProperty ([
         Cesium.Cartesian3.fromDegrees(longitude, latitude, 0),
         Cesium.Cartesian3.fromDegrees(longitude, latitude, height)
-      ]
+      ])
     }
   })
 
