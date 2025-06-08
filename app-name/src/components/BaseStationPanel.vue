@@ -268,6 +268,100 @@
               </div>
             </div>
           </div>
+
+          <!-- 射线可视化配置 - 新增 -->
+          <div class="visualization-section">
+            <div class="visualization-header">
+              <label class="visualization-toggle">
+                <input
+                    type="checkbox"
+                    v-model="antenna.visualization.enabled"
+                    @change="updateAntennaVisualization(antenna)"
+                />
+                <span class="toggle-text">📡 显示传播射线</span>
+              </label>
+            </div>
+
+            <div v-if="antenna.visualization.enabled" class="visualization-controls">
+              <div class="control-group">
+                <label>
+                  水平波束宽度：
+                  <input
+                      type="number"
+                      v-model.number="antenna.visualization.horizontalBeamWidth"
+                      @input="updateAntennaVisualization(antenna)"
+                      min="10"
+                      max="360"
+                      step="10"
+                  />°
+                </label>
+
+                <label>
+                  垂直波束宽度：
+                  <input
+                      type="number"
+                      v-model.number="antenna.visualization.verticalBeamWidth"
+                      @input="updateAntennaVisualization(antenna)"
+                      min="5"
+                      max="180"
+                      step="5"
+                  />°
+                </label>
+              </div>
+
+              <div class="control-group">
+                <label>
+                  最大距离：
+                  <input
+                      type="number"
+                      v-model.number="antenna.visualization.maxDistance"
+                      @input="updateAntennaVisualization(antenna)"
+                      min="500"
+                      max="20000"
+                      step="500"
+                  />m
+                </label>
+
+                <label>
+                  透明度：
+                  <input
+                      type="range"
+                      v-model.number="antenna.visualization.transparency"
+                      @input="updateAntennaVisualization(antenna)"
+                      min="0.1"
+                      max="1"
+                      step="0.1"
+                  />
+                  <span class="value-display">{{ (antenna.visualization.transparency * 100).toFixed(0) }}%</span>
+                </label>
+              </div>
+
+              <div class="control-group">
+                <label>
+                  精度设置：
+                  <select
+                      v-model="antenna.visualization.horizontalSteps"
+                      @change="updateAntennaVisualization(antenna)"
+                      class="precision-select"
+                  >
+                    <option :value="6">低精度 (6步)</option>
+                    <option :value="12">中精度 (12步)</option>
+                    <option :value="24">高精度 (24步)</option>
+                    <option :value="36">超高精度 (36步)</option>
+                  </select>
+                </label>
+
+                <label class="contour-toggle">
+                  <input
+                      type="checkbox"
+                      v-model="antenna.visualization.showContours"
+                      @change="updateAntennaVisualization(antenna)"
+                  />
+                  <span>显示等值线</span>
+                </label>
+              </div>
+            </div>
+          </div>
         </div>
 
         <button @click="addAntenna" class="btn-add">➕ 添加天线</button>
@@ -310,7 +404,17 @@ function togglePanel() {
   }
 }
 
-
+// 更新天线可视化
+function updateAntennaVisualization(antenna: Antenna) {
+  // 触发可视化更新事件
+  window.dispatchEvent(new CustomEvent('updateAntennaVisualization', {
+    detail: {
+      stationId: selected.value?.id,
+      antennaId: antenna.id,
+      antenna: antenna
+    }
+  }))
+}
 // 修改添加天线函数，设置默认传播模型
 function addAntenna() {
   if (!selected.value) return
@@ -326,7 +430,18 @@ function addAntenna() {
     power: 20,
     gain: 15,
     frequency: 1800, // 默认1800MHz
-    propagationModel: { ...defaultModel }
+    propagationModel: { ...defaultModel },
+    visualization: {  // 新增默认可视化配置
+      enabled: false,
+      horizontalBeamWidth:40,
+      verticalBeamWidth: 30,
+      horizontalSteps: 12,
+      verticalSteps: 30,
+      maxDistance: 5000,
+      transparency: 0.6,
+      showContours: false,
+
+    }
   }
 
   store.addAntennaToStation(selected.value.id, newAntenna)
@@ -1030,5 +1145,96 @@ function getModelDescription(type: string): string {
   border: 1px solid #ddd;
   border-radius: 3px;
   font-size: 11px;
+}
+.visualization-section {
+  margin-top: 15px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.visualization-header {
+  margin-bottom: 12px;
+}
+
+.visualization-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #1976d2;
+  cursor: pointer;
+}
+
+.visualization-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.toggle-text {
+  font-size: 13px;
+}
+
+.visualization-controls {
+  background: #f8f9ff;
+  border: 1px solid #e3f2fd;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.control-group:last-child {
+  margin-bottom: 0;
+}
+
+.control-group label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #555;
+}
+
+.control-group input[type="number"],
+.control-group input[type="range"] {
+  width: 80px;
+  padding: 4px 6px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.control-group input[type="range"] {
+  width: 60px;
+}
+
+.value-display {
+  color: #666;
+  font-size: 10px;
+  min-width: 30px;
+  text-align: right;
+}
+
+.precision-select {
+  width: 120px;
+  padding: 4px 6px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.contour-toggle {
+  font-size: 11px;
+  gap: 6px;
+}
+
+.contour-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
 }
 </style>

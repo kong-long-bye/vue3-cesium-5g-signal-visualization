@@ -22,6 +22,7 @@ export interface Antenna {
     gain: number            // 天线增益（dBi）
     frequency: number       // 工作频率（MHz）- 新增
     propagationModel: PropagationModel  // 传播模型配置 - 新增
+    visualization: AntennaVisualizationConfig // 可视化配置
 }
 
 // 基站接口定义
@@ -41,4 +42,16 @@ export interface SignalStrengthResult {
     antennaId: string      // 天线ID
     stationId: string      // 基站ID
     model: string          // 使用的传播模型
+}
+// 天线可视化配置ort interface AntennaVisualizationConfig {
+
+export interface AntennaVisualizationConfig {
+    enabled: boolean              // 是否启用可视化
+    horizontalBeamWidth: number   // 水平波束宽度（度）默认120
+    verticalBeamWidth: number     // 垂直波束宽度（度）默认30（±15）
+    horizontalSteps: number       // 水平分割步数，默认12（每10度一个扇形）
+    verticalSteps: number         // 垂直分割步数，默认30（每1度一层）
+    maxDistance: number           // 最大显示距离（米）默认5000
+    transparency: number          // 透明度 0-1，默认0.6
+    showContours: boolean         // 是否显示等值线
 }

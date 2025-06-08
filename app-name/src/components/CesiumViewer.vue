@@ -9,6 +9,7 @@ import { useBaseStationStore } from '../stores/baseStations'
 import { nanoid } from 'nanoid'
 import{type SignalStrengthResult} from '../types.ts'
 import { calculateBestSignal,   } from '../utils/propagationModels'
+import { AntennaRayVisualization } from '../utils/antennaVisualization'
 const store = useBaseStationStore()
 const cesiumContainer = ref<HTMLElement | null>(null)
 let viewer: Cesium.Viewer
@@ -141,12 +142,17 @@ onMounted(() => {
    viewer = new Cesium.Viewer(cesiumContainer.value, {
 
   })
+
+
+      const rayVisualization = new AntennaRayVisualization(viewer)
+
+
   // 设置默认视角到重庆市
   viewer.camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(106.6148619 , 29.5391032, 200), // 重庆坐标，高度50km
     orientation: {
       heading: Cesium.Math.toRadians(0),     // 正北方向
-      pitch: Cesium.Math.toRadians(-90),     // 俯视角度45度
+      pitch: Cesium.Math.toRadians(-30),     // 俯视角度45度
       roll: 0.0
     }
   })
@@ -272,7 +278,14 @@ onMounted(() => {
     const { stationId } = event.detail
     const entity = viewer.entities.getById(stationId)
     const poleEntity = viewer.entities.getById(`${stationId}_pole`)
+    const station = store.stations.find(s => s.id === stationId)
 
+    // 清除该基站所有天线的射线可视化
+    if (station) {
+      station.antennas.forEach(antenna => {
+        rayVisualization.clearAntenna(antenna.id)
+      })
+    }
     if (entity) viewer.entities.remove(entity)
     if (poleEntity) viewer.entities.remove(poleEntity)
   })
@@ -288,6 +301,7 @@ onMounted(() => {
 
   // 监听清空所有基站事件
   window.addEventListener('clearAllStationsFromMap', () => {
+    rayVisualization.clearAll()
     viewer.entities.removeAll()
   })
 
@@ -331,7 +345,27 @@ onMounted(() => {
           clampToGround: false
         }
       })
+      // 重新渲染启用的天线射线
+      station.antennas.forEach((antenna: any) => {
+        if (antenna.visualization?.enabled) {
+          rayVisualization.renderAntenna(station, antenna)
+        }
+      })
     })
+  })
+  window.addEventListener('updateAntennaVisualization', (event: any) => {
+    const { stationId, antennaId, antenna } = event.detail
+    const station = store.stations.find(s => s.id === stationId)
+
+    if (station && antenna) {
+      if (antenna.visualization.enabled) {
+        // 渲染天线射线
+        rayVisualization.renderAntenna(station, antenna)
+      } else {
+        // 清除天线射线
+        rayVisualization.clearAntenna(antennaId)
+      }
+    }
   })
 // 监听基站位置更新事件
   window.addEventListener('updateStationPosition', (event: any) => {
@@ -354,9 +388,6 @@ onMounted(() => {
   })
 
 }
-
-
-
 )
 
 
