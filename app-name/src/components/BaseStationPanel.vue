@@ -269,96 +269,368 @@
             </div>
           </div>
 
-          <!-- 射线可视化配置 - 新增 -->
-          <div class="visualization-section">
-            <div class="visualization-header">
-              <label class="visualization-toggle">
-                <input
-                    type="checkbox"
-                    v-model="antenna.visualization.enabled"
-                    @change="updateAntennaVisualization(antenna)"
-                />
-                <span class="toggle-text">📡 显示传播射线</span>
-              </label>
+          <!-- 🔬 射线追踪模式选择 - 新增 -->
+          <div class="raytracing-mode-section">
+            <div class="raytracing-mode-header">
+              <h5>🔬 射线追踪模式</h5>
             </div>
 
-            <div v-if="antenna.visualization.enabled" class="visualization-controls">
-              <div class="control-group">
-                <label>
-                  水平波束宽度：
-                  <input
-                      type="number"
-                      v-model.number="antenna.visualization.horizontalBeamWidth"
-                      @input="updateAntennaVisualization(antenna)"
-                      min="10"
-                      max="360"
-                      step="10"
-                  />°
-                </label>
+            <div class="raytracing-mode-selector">
+              <label class="raytracing-mode-option">
+                <input
+                    type="radio"
+                    value="geometric"
+                    v-model="antenna.rayTracingType"
+                    @change="updateRayTracingMode(antenna)"
+                />
+                <span class="mode-text">📐 几何射线追踪</span>
+                <small class="mode-desc">简单的几何线条显示</small>
+              </label>
 
-                <label>
-                  垂直波束宽度：
-                  <input
-                      type="number"
-                      v-model.number="antenna.visualization.verticalBeamWidth"
-                      @input="updateAntennaVisualization(antenna)"
-                      min="5"
-                      max="180"
-                      step="5"
-                  />°
-                </label>
-              </div>
+              <label class="raytracing-mode-option">
+                <input
+                    type="radio"
+                    value="threejs"
+                    v-model="antenna.rayTracingType"
+                    @change="updateRayTracingMode(antenna)"
+                />
+                <span class="mode-text">🎯 3D立体射线追踪</span>
+                <small class="mode-desc">Three.js风格的真实3D效果</small>
+              </label>
 
-              <div class="control-group">
-                <label>
-                  最大距离：
-                  <input
-                      type="number"
-                      v-model.number="antenna.visualization.maxDistance"
-                      @input="updateAntennaVisualization(antenna)"
-                      min="500"
-                      max="20000"
-                      step="500"
-                  />m
-                </label>
 
-                <label>
-                  透明度：
-                  <input
-                      type="range"
-                      v-model.number="antenna.visualization.transparency"
-                      @input="updateAntennaVisualization(antenna)"
-                      min="0.1"
-                      max="1"
-                      step="0.1"
-                  />
-                  <span class="value-display">{{ (antenna.visualization.transparency * 100).toFixed(0) }}%</span>
-                </label>
-              </div>
-
-              <div class="control-group">
-                <label>
-                  精度设置：
-                  <select
-                      v-model="antenna.visualization.horizontalSteps"
-                      @change="updateAntennaVisualization(antenna)"
-                      class="precision-select"
-                  >
-                    <option :value="6">低精度 (6步)</option>
-                    <option :value="12">中精度 (12步)</option>
-                    <option :value="24">高精度 (24步)</option>
-                    <option :value="36">超高精度 (36步)</option>
-                  </select>
-                </label>
-
-                <label class="contour-toggle">
+            </div>
+          </div>
+          <!-- 📐 几何射线追踪配置 - 新增 -->
+          <div v-if="antenna.rayTracingType === 'geometric'" class="geometric-raytracing-section">
+            <div class="geometric-header">
+              <h5>📐 几何射线追踪配置</h5>
+              <div class="geometric-toggle">
+                <label class="toggle-switch">
                   <input
                       type="checkbox"
-                      v-model="antenna.visualization.showContours"
+                      v-model="antenna.visualization.enabled"
                       @change="updateAntennaVisualization(antenna)"
                   />
-                  <span>显示等值线</span>
+                  <span class="toggle-slider"></span>
+                  <span class="toggle-text">启用几何射线</span>
                 </label>
+              </div>
+            </div>
+
+            <div  class="geometric-controls">
+              <!-- 波束角度控制 -->
+              <div class="control-section">
+                <h6>📐 波束角度设置</h6>
+                <div class="control-grid">
+                  <div class="control-item">
+                    <label>
+                      水平波束宽度：
+                      <span class="value-display">{{ antenna.visualization.horizontalBeamWidth }}°</span>
+                    </label>
+                    <input
+                        type="range"
+                        v-model.number="antenna.visualization.horizontalBeamWidth"
+                        @input="updateAntennaVisualization(antenna)"
+                        min="10"
+                        max="360"
+                        step="10"
+                        class="range-slider"
+                    />
+                  </div>
+
+                  <div class="control-item">
+                    <label>
+                      垂直波束宽度：
+                      <span class="value-display">{{ antenna.visualization.verticalBeamWidth }}°</span>
+                    </label>
+                    <input
+                        type="range"
+                        v-model.number="antenna.visualization.verticalBeamWidth"
+                        @input="updateAntennaVisualization(antenna)"
+                        min="5"
+                        max="180"
+                        step="5"
+                        class="range-slider"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- 显示参数控制 -->
+              <div class="control-section">
+                <h6>🎨 显示参数</h6>
+                <div class="control-grid">
+                  <div class="control-item">
+                    <label>
+                      最大距离：
+                      <span class="value-display">{{ antenna.visualization.maxDistance }}m</span>
+                    </label>
+                    <input
+                        type="range"
+                        v-model.number="antenna.visualization.maxDistance"
+                        @input="updateAntennaVisualization(antenna)"
+                        min="500"
+                        max="20000"
+                        step="500"
+                        class="range-slider"
+                    />
+                  </div>
+
+                  <div class="control-item">
+                    <label>
+                      透明度：
+                      <span class="value-display">{{ Math.round(antenna.visualization.transparency * 100) }}%</span>
+                    </label>
+                    <input
+                        type="range"
+                        v-model.number="antenna.visualization.transparency"
+                        @input="updateAntennaVisualization(antenna)"
+                        min="0.1"
+                        max="1"
+                        step="0.1"
+                        class="range-slider opacity-slider"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- 精度设置 -->
+              <div class="control-section">
+                <h6>⚙️ 精度设置</h6>
+                <div class="precision-controls">
+                  <div class="control-item">
+                    <label>
+                      精度等级：
+                      <select
+                          v-model="antenna.visualization.horizontalSteps"
+                          @change="updateAntennaVisualization(antenna)"
+                          class="precision-select"
+                      >
+                        <option :value="6">低精度 (6步)</option>
+                        <option :value="12">中精度 (12步)</option>
+                        <option :value="24">高精度 (24步)</option>
+                        <option :value="36">超高精度 (36步)</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="control-item">
+                    <label class="checkbox-item">
+                      <input
+                          type="checkbox"
+                          v-model="antenna.visualization.showContours"
+                          @change="updateAntennaVisualization(antenna)"
+                      />
+                      <span class="checkbox-text">显示等值线</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 📡 Three.js风格3D射线追踪配置 - 新增 -->
+          <div v-if="antenna.rayTracingType === 'threejs'" class="threejs-raytracing-section">
+            <div class="threejs-header">
+              <h5>🎯 3D立体射线追踪配置</h5>
+              <div class="threejs-toggle">
+                <label class="toggle-switch">
+                  <input
+                      type="checkbox"
+                      v-model="antenna.threeJSRayTracing.enabled"
+                      @change="updateThreeJSRayTracing(antenna)"
+                  />
+                  <span class="toggle-slider"></span>
+                  <span class="toggle-text">启用3D射线追踪</span>
+                </label>
+              </div>
+            </div>
+
+            <div  class="threejs-controls">
+              <!-- 波束角度控制 -->
+              <div class="control-section">
+                <h6>📐 波束角度设置</h6>
+                <div class="control-grid">
+                  <div class="control-item">
+                    <label>
+                      水平波束角度:
+                      <span class="value-display">{{ antenna.threeJSRayTracing.azimuthAngle }}°</span>
+                    </label>
+                    <input
+                        type="range"
+                        v-model.number="antenna.threeJSRayTracing.azimuthAngle"
+                        @input="updateThreeJSRayTracing(antenna)"
+                        min="30"
+                        max="180"
+                        step="10"
+                        class="range-slider azimuth-slider"
+                    />
+                  </div>
+
+                  <div class="control-item">
+                    <label>
+                      垂直波束角度:
+                      <span class="value-display">{{ antenna.threeJSRayTracing.elevationAngle }}°</span>
+                    </label>
+                    <input
+                        type="range"
+                        v-model.number="antenna.threeJSRayTracing.elevationAngle"
+                        @input="updateThreeJSRayTracing(antenna)"
+                        min="10"
+                        max="90"
+                        step="5"
+                        class="range-slider elevation-slider"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- 计算参数控制 -->
+              <div class="control-section">
+                <h6>⚡ 计算参数</h6>
+                <div class="control-grid">
+                  <div class="control-item">
+                    <label>
+                      射线密度:
+                      <span class="value-display">{{ getDensityLabel(antenna.threeJSRayTracing.density) }}</span>
+                    </label>
+                    <input
+                        type="range"
+                        v-model.number="antenna.threeJSRayTracing.density"
+                        @input="updateThreeJSRayTracing(antenna)"
+                        min="1"
+                        max="5"
+                        step="1"
+                        class="range-slider density-slider"
+                    />
+                  </div>
+
+                  <div class="control-item">
+                    <label>
+                      最大距离:
+                      <span class="value-display">{{ antenna.threeJSRayTracing.maxRange }}m</span>
+                    </label>
+                    <input
+                        type="range"
+                        v-model.number="antenna.threeJSRayTracing.maxRange"
+                        @input="updateThreeJSRayTracing(antenna)"
+                        min="200"
+                        max="1000"
+                        step="50"
+                        class="range-slider range-slider"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- 显示效果控制 -->
+              <div class="control-section">
+                <h6>🎨 显示效果</h6>
+                <div class="effect-controls">
+                  <div class="checkbox-group">
+                    <label class="checkbox-item">
+                      <input
+                          type="checkbox"
+                          v-model="antenna.threeJSRayTracing.showObstacles"
+                          @change="updateThreeJSRayTracing(antenna)"
+                      />
+                      <span class="checkbox-text">🏢 显示建筑物遮挡</span>
+                    </label>
+
+                    <label class="checkbox-item">
+                      <input
+                          type="checkbox"
+                          v-model="antenna.threeJSRayTracing.showRays"
+                          @change="updateThreeJSRayTracing(antenna)"
+                      />
+                      <span class="checkbox-text">📡 显示射线轨迹</span>
+                    </label>
+
+                    <label class="checkbox-item">
+                      <input
+                          type="checkbox"
+                          v-model="antenna.threeJSRayTracing.animateSignals"
+                          @change="updateThreeJSRayTracing(antenna)"
+                      />
+                      <span class="checkbox-text">✨ 信号点脉动动画</span>
+                    </label>
+                  </div>
+
+                  <div class="visual-controls">
+                    <div class="control-item">
+                      <label>
+                        射线透明度:
+                        <span class="value-display">{{ Math.round(antenna.threeJSRayTracing.rayOpacity * 100) }}%</span>
+                      </label>
+                      <input
+                          type="range"
+                          v-model.number="antenna.threeJSRayTracing.rayOpacity"
+                          @input="updateThreeJSRayTracing(antenna)"
+                          min="0.1"
+                          max="1"
+                          step="0.1"
+                          class="range-slider opacity-slider"
+                      />
+                    </div>
+
+                    <div class="control-item">
+                      <label>
+                        信号点大小:
+                        <span class="value-display">{{ antenna.threeJSRayTracing.signalPointSize }}px</span>
+                      </label>
+                      <input
+                          type="range"
+                          v-model.number="antenna.threeJSRayTracing.signalPointSize"
+                          @input="updateThreeJSRayTracing(antenna)"
+                          min="4"
+                          max="16"
+                          step="1"
+                          class="range-slider size-slider"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 信号强度图例 -->
+              <div class="signal-legend">
+                <h6>📊 信号强度图例</h6>
+                <div class="legend-items">
+                  <div class="legend-item">
+                    <div class="legend-color" style="background: #32ff32;"></div>
+                    <span>强信号 (&gt; -60dBm)</span>
+                  </div>
+                  <div class="legend-item">
+                    <div class="legend-color" style="background: #adff2f;"></div>
+                    <span>良好 (-60 ~ -70dBm)</span>
+                  </div>
+                  <div class="legend-item">
+                    <div class="legend-color" style="background: #ffff00;"></div>
+                    <span>中等 (-70 ~ -80dBm)</span>
+                  </div>
+                  <div class="legend-item">
+                    <div class="legend-color" style="background: #ffa500;"></div>
+                    <span>弱信号 (-80 ~ -100dBm)</span>
+                  </div>
+                  <div class="legend-item">
+                    <div class="legend-color" style="background: #ff0000;"></div>
+                    <span>很弱 (&lt; -100dBm)</span>
+                  </div>
+                  <div class="legend-item">
+                    <div class="legend-color" style="background: #808080;"></div>
+                    <span>阴影/遮挡区域</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 性能提示 -->
+              <div class="performance-warning" v-if="antenna.threeJSRayTracing.density > 3">
+                <div class="warning-icon">⚠️</div>
+                <div class="warning-text">
+                  <strong>性能提示：</strong><br>
+                  高密度设置可能影响渲染性能，建议在低端设备上使用中等密度。
+                </div>
               </div>
             </div>
           </div>
@@ -404,11 +676,44 @@ function togglePanel() {
     showDetails.value = false
   }
 }
+// 新增：更新射线追踪模式
+function updateRayTracingMode(antenna: Antenna) {
+  // 切换模式时，先禁用其他模式
+  // 切换模式时，先禁用所有模式的渲染
+  antenna.visualization.enabled = false
+  antenna.threeJSRayTracing.enabled = false
+  // 通知地图组件更新射线追踪模式
+  window.dispatchEvent(new CustomEvent('updateRayTracingMode', {
+    detail: {
+      stationId: selected.value?.id,
+      antennaId: antenna.id,
+      antenna: antenna
+    }
+  }))
+}
+
+// 新增：更新Three.js射线追踪配置
+function updateThreeJSRayTracing(antenna: Antenna) {
+
+  window.dispatchEvent(new CustomEvent('updateAntennaVisualization', {
+    detail: {
+      stationId: selected.value?.id,
+      antennaId: antenna.id,
+      antenna: antenna
+    }
+  }))
+}
+
+// 新增：获取密度标签
+function getDensityLabel(density: number): string {
+  const labels = ['很低', '低', '中等', '高', '很高']
+  return labels[density - 1] || '中等'
+}
 
 // 更新天线可视化
 function updateAntennaVisualization(antenna: Antenna) {
   // 触发可视化更新事件
-  window.dispatchEvent(new CustomEvent('updateAntennaVisualization', {
+  window. dispatchEvent(new CustomEvent('updateAntennaVisualization', {
     detail: {
       stationId: selected.value?.id,
       antennaId: antenna.id,
@@ -442,7 +747,20 @@ function addAntenna() {
       transparency: 0.6,
       showContours: false,
 
-    }
+    },
+    threeJSRayTracing: {  // 新增默认Three.js射线追踪配置
+      enabled: false,
+      azimuthAngle: 120,
+      elevationAngle: 30,
+      density: 3,
+      maxRange: 500,
+      showObstacles: true,
+      showRays: true,
+      animateSignals: true,
+      rayOpacity: 0.4,
+      signalPointSize: 8
+    },
+    rayTracingType: 'geometric'
   }
 
   store.addAntennaToStation(selected.value.id, newAntenna)
@@ -1244,5 +1562,339 @@ function getModelDescription(type: string): string {
 .contour-toggle input[type="checkbox"] {
   width: 14px;
   height: 14px;
+}
+
+
+
+/* 射线追踪模式选择样式 */
+.raytracing-mode-section {
+  margin-top: 15px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.raytracing-mode-header h5 {
+  margin: 0 0 12px 0;
+  color: #1976d2;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.raytracing-mode-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.raytracing-mode-option {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.raytracing-mode-option:hover {
+  border-color: #2196f3;
+  background: #f8f9ff;
+}
+
+.raytracing-mode-option input[type="radio"]:checked + .mode-text {
+  color: #1976d2;
+  font-weight: 600;
+}
+
+.raytracing-mode-option input[type="radio"] {
+  display: none;
+}
+
+.raytracing-mode-option input[type="radio"]:checked ~ .mode-desc {
+  color: #1976d2;
+}
+
+.raytracing-mode-option:has(input[type="radio"]:checked) {
+  border-color: #2196f3;
+  background: #e3f2fd;
+}
+
+.mode-text {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.mode-desc {
+  font-size: 11px;
+  color: #666;
+}
+
+/* Three.js射线追踪配置样式 */
+.threejs-raytracing-section {
+  margin-top: 15px;
+  background: linear-gradient(135deg, #f8f9ff 0%, #e8f4fd 100%);
+  border: 1px solid #2196f3;
+  border-radius: 12px;
+  padding: 15px;
+}
+
+.threejs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.threejs-header h5 {
+  margin: 0;
+  color: #1976d2;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.toggle-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #555;
+  cursor: pointer;
+}
+
+.toggle-slider {
+  position: relative;
+  width: 40px;
+  height: 20px;
+  background: #ccc;
+  border-radius: 20px;
+  transition: all 0.3s;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: all 0.3s;
+}
+
+.toggle-switch input[type="checkbox"]:checked + .toggle-slider {
+  background: #2196f3;
+}
+
+.toggle-switch input[type="checkbox"]:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+.toggle-switch input[type="checkbox"] {
+  display: none;
+}
+
+.threejs-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.control-section {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.control-section h6 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.control-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.control-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.control-item label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #555;
+  font-weight: 500;
+}
+
+.value-display {
+  color: #1976d2;
+  font-weight: 600;
+  background: rgba(33, 150, 243, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  min-width: 40px;
+  text-align: center;
+}
+
+.range-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none;
+  background: linear-gradient(to right, #e0e0e0 0%, #2196f3 0%, #2196f3 50%, #e0e0e0 50%);
+}
+
+.range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #2196f3;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.range-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #2196f3;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.azimuth-slider {
+  background: linear-gradient(to right, #ff9800, #2196f3, #ff9800);
+}
+
+.elevation-slider {
+  background: linear-gradient(to right, #4caf50, #2196f3, #4caf50);
+}
+
+.density-slider {
+  background: linear-gradient(to right, #e0e0e0, #ff5722);
+}
+
+.opacity-slider {
+  background: linear-gradient(to right, rgba(33, 150, 243, 0.1), rgba(33, 150, 243, 1));
+}
+
+.effect-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 11px;
+  color: #555;
+  padding: 6px 8px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.checkbox-item:hover {
+  background: rgba(33, 150, 243, 0.1);
+}
+
+.checkbox-item input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.checkbox-text {
+  font-weight: 500;
+}
+
+.visual-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e0e0e0;
+}
+
+/* 信号强度图例样式 */
+.signal-legend {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.signal-legend h6 {
+  margin: 0 0 8px 0;
+  color: #333;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #555;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+/* 性能警告样式 */
+.performance-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.warning-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.warning-text {
+  font-size: 10px;
+  color: #e65100;
+  line-height: 1.3;
+}
+
+.warning-text strong {
+  color: #d84315;
 }
 </style>

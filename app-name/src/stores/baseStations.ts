@@ -103,6 +103,35 @@ export const useBaseStationStore = defineStore('baseStations', {
         // 获取总天线数
         totalAntennas(state): number {
             return state.stations.reduce((total, station) => total + station.antennas.length, 0)
+        },
+        // 新增：Three.js射线追踪天线统计
+        threeJSRayTracingAntennas(state): number {
+            return state.stations.reduce((total, station) =>
+                    total + station.antennas.filter(antenna =>
+                        antenna.rayTracingType === 'threejs' && antenna.threeJSRayTracing.enabled
+                    ).length, 0
+            )
+        },
+
+        // 新增：活跃射线追踪天线统计
+        activeRayTracingAntennas(state): { geometric: number, threejs: number } {
+            let geometric = 0, threejs = 0
+
+            state.stations.forEach(station => {
+                station.antennas.forEach(antenna => {
+                    switch (antenna.rayTracingType) {
+                        case 'geometric':
+                            if (antenna.visualization.enabled) geometric++
+                            break
+                        case 'threejs':
+                            if (antenna.threeJSRayTracing.enabled) threejs++
+                            break
+
+                    }
+                })
+            })
+
+            return { geometric, threejs}
         }
     }
 })

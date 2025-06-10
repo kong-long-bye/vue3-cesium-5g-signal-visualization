@@ -22,7 +22,9 @@ export interface Antenna {
     gain: number            // 天线增益（dBi）
     frequency: number       // 工作频率（MHz）- 新增
     propagationModel: PropagationModel  // 传播模型配置 - 新增
-    visualization: AntennaVisualizationConfig // 可视化配置
+    visualization: AntennaVisualizationConfig // 几何可视化配置
+    threeJSRayTracing: ThreeJSRayTracingConfig // Three.js风格射线追踪配置
+    rayTracingType: RayTracingType // 射线追踪类型
 }
 
 // 基站接口定义
@@ -55,3 +57,22 @@ export interface AntennaVisualizationConfig {
     transparency: number          // 透明度 0-1，默认0.6
     showContours: boolean         // 是否显示等值线
 }
+
+
+
+// ========== 新增：Three.js风格射线追踪配置 ==========
+export interface ThreeJSRayTracingConfig {
+    enabled: boolean
+    azimuthAngle: number        // 水平波束角度
+    elevationAngle: number      // 垂直波束角度
+    density: number             // 射线密度 1-5
+    maxRange: number            // 最大距离（米）
+    showObstacles: boolean      // 显示建筑物遮挡
+    showRays: boolean           // 显示射线轨迹
+    animateSignals: boolean     // 信号点脉动动画
+    rayOpacity: number          // 射线透明度
+    signalPointSize: number     // 信号点大小
+}
+
+// 射线追踪类型枚举
+export type RayTracingType = 'geometric' | 'threejs'

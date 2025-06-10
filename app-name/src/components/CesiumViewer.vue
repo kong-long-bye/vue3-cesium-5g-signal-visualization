@@ -10,6 +10,7 @@ import { nanoid } from 'nanoid'
 import{type SignalStrengthResult} from '../types.ts'
 import { calculateBestSignal,   } from '../utils/propagationModels'
 import { AntennaRayVisualization } from '../utils/antennaVisualization'
+import { ThreeJSRayTracingManager } from '../utils/threejsRayTracing'
 const store = useBaseStationStore()
 const cesiumContainer = ref<HTMLElement | null>(null)
 let viewer: Cesium.Viewer
@@ -144,10 +145,10 @@ onMounted(() => {
   })
 
 
-      const rayVisualization = new AntennaRayVisualization(viewer)
+      const geometricRayVisualization = new AntennaRayVisualization(viewer)
+      const threeJSRayTracingManager = new ThreeJSRayTracingManager(viewer)
 
-
-  // 设置默认视角到重庆市
+      // 设置默认视角到重庆市
   viewer.camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(106.6148619 , 29.5391032, 200), // 重庆坐标，高度50km
     orientation: {
@@ -219,7 +220,39 @@ onMounted(() => {
     store.selectStation(id)
 
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
-  // 添加右键点击事件 - 信号强度查询
+
+
+  // ========== 新增：射线追踪模式切换事件 ==========
+  window.addEventListener('updateRayTracingMode', (event: any) => {
+    const { stationId, antennaId, antenna } = event.detail
+    const station = store.stations.find(s => s.id === stationId)
+    console.log('更新射线追踪模式', antenna.rayTracingType)
+    if (station && antenna) {
+      // 清除所有射线追踪显示
+      geometricRayVisualization.clearAntenna(antennaId)
+
+      threeJSRayTracingManager.clearAntenna(antennaId)
+
+      // 根据选择的模式启用对应的射线追踪
+      switch (antenna.rayTracingType) {
+        case 'geometric':
+          if (antenna.visualization.enabled) {
+            geometricRayVisualization.renderAntenna(station, antenna)
+          }
+          break
+
+        case 'threejs':
+          if (antenna.threeJSRayTracing.enabled) {
+            threeJSRayTracingManager.enable(antenna.threeJSRayTracing)
+            threeJSRayTracingManager.renderAntenna(station, antenna)
+          }
+          break
+
+
+      }
+    }
+  })
+      // 添加右键点击事件 - 信号强度查询
   viewer.screenSpaceEventHandler.setInputAction((event:any) => {
     const cartesian = viewer.scene.pickPosition(event.position)
     if (!cartesian) return
@@ -283,7 +316,9 @@ onMounted(() => {
     // 清除该基站所有天线的射线可视化
     if (station) {
       station.antennas.forEach(antenna => {
-        rayVisualization.clearAntenna(antenna.id)
+        geometricRayVisualization.clearAntenna(antenna.id)
+
+        threeJSRayTracingManager.clearAntenna(antenna.id)  // 新增Three.js清除
       })
     }
     if (entity) viewer.entities.remove(entity)
@@ -306,13 +341,18 @@ onMounted(() => {
 
   // 监听清空所有基站事件
   window.addEventListener('clearAllStationsFromMap', () => {
-    rayVisualization.clearAll()
+    geometricRayVisualization.clearAll()
+
+    threeJSRayTracingManager.clearAll()
     viewer.entities.removeAll()
   })
 
   // 监听重新加载基站事件（用于数据导入）
   window.addEventListener('reloadStationsOnMap', (event: any) => {
     const { stations } = event.detail
+    geometricRayVisualization.clearAll()
+
+    threeJSRayTracingManager.clearAll()
     viewer.entities.removeAll()
 
     stations.forEach((station: any) => {
@@ -353,23 +393,38 @@ onMounted(() => {
       // 重新渲染启用的天线射线
       station.antennas.forEach((antenna: any) => {
         if (antenna.visualization?.enabled) {
-          rayVisualization.renderAntenna(station, antenna)
+          geometricRayVisualization.renderAntenna(station, antenna)
         }
       })
     })
   })
+  // ========== 修改：现有的天线可视化更新事件，支持多种模式
   window.addEventListener('updateAntennaVisualization', (event: any) => {
     const { stationId, antennaId, antenna } = event.detail
     const station = store.stations.find(s => s.id === stationId)
 
     if (station && antenna) {
-      if (antenna.visualization.enabled) {
-        // 渲染天线射线
-        rayVisualization.renderAntenna(station, antenna)
-      } else {
-        // 清除天线射线
 
-        rayVisualization.clearAntenna(antennaId)
+      // 根据当前射线追踪类型更新相应的可视化
+      switch (antenna.rayTracingType) {
+        case 'geometric':
+          if (antenna.visualization.enabled) {
+            geometricRayVisualization.renderAntenna(station, antenna)
+          } else {
+            geometricRayVisualization.clearAntenna(antennaId)
+          }
+          break
+
+        case 'threejs':
+          if (antenna.threeJSRayTracing.enabled) {
+            console.log('更新天线可视化', antennaId, antenna.rayTracingType, antenna.threeJSRayTracing.enabled)
+            threeJSRayTracingManager.renderAntenna(station, antenna)
+          } else {
+            threeJSRayTracingManager.clearAntenna(antennaId)
+          }
+          break
+
+
       }
     }
   })
@@ -395,7 +450,8 @@ onMounted(() => {
   // 监听删除天线可视化事件
   window.addEventListener('removeAntennaVisualization', (event: any) => {
     const { antennaId } = event.detail
-    rayVisualization.clearAntenna(antennaId)
+    geometricRayVisualization.clearAntenna(antennaId)
+    threeJSRayTracingManager.clearAntenna(antennaId)
   })
 }
 )
