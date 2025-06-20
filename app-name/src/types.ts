@@ -76,3 +76,46 @@ export interface ThreeJSRayTracingConfig {
 
 // 射线追踪类型枚举
 export type RayTracingType = 'geometric' | 'threejs'
+
+
+
+
+// ========== 新增：楼体相关类型定义 ==========
+
+// 楼体接口定义
+export interface Building {
+    id: string              // 唯一标识符
+    name: string           // 楼体名称
+    longitude: number      // 经度（楼体中心点）
+    latitude: number       // 纬度（楼体中心点）
+    height: number         // 楼体高度（米）
+    width: number          // 楼体宽度（米，东西方向）
+    length: number         // 楼体长度（米，南北方向）
+    floors: number         // 楼层数
+    wallLoss: number       // 墙体损耗（dB）
+    roofLoss: number       // 屋顶损耗（dB）
+    floorLoss: number      // 楼层损耗（dB，每层）
+    materialType: BuildingMaterialType  // 建筑材料类型
+    rotation: number       // 旋转角度（度，0为正北）
+    color: string          // 楼体颜色（十六进制）
+    opacity: number        // 透明度 0-1
+}
+
+// 建筑材料类型
+export type BuildingMaterialType = 'concrete' | 'brick' | 'steel' | 'glass' | 'wood'
+
+// 建筑材料配置
+export interface BuildingMaterial {
+    type: BuildingMaterialType
+    name: string
+    wallLoss: number       // 默认墙体损耗
+    roofLoss: number       // 默认屋顶损耗
+    floorLoss: number      // 默认楼层损耗
+    color: string          // 默认颜色
+}
+
+// 楼体创建模式状态
+export interface BuildingCreationState {
+    isCreatingBuilding: boolean
+    selectedBuildingId: string | null
+}

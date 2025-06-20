@@ -1,12 +1,9 @@
 <template>
   <div class="panel">
-    <!-- 左侧收缩按钮 -->
-    <div class="toggle-btn" @click="togglePanel" :class="{ expanded: isExpanded }">
-      {{ isExpanded ? '◀' : '▶' }}
-    </div>
+
 
     <!-- 左侧基站列表 -->
-    <div class="list" v-show="isExpanded">
+    <div class="list" >
       <h3>基站列表 ({{ store.totalStations }})</h3>
       <ul>
         <li
@@ -44,7 +41,7 @@
     </div>
 
     <!-- 右侧基站详情 -->
-    <div class="details" v-if="selected && isExpanded && showDetails">
+    <div class="details" v-if="selected  && showDetails">
       <!-- 详情面板顶部工具栏 -->
       <div class="details-header">
         <h3>{{ selected.name }}</h3>
@@ -663,17 +660,10 @@ import { PROPAGATION_MODELS, getPropagationModel } from '../utils/propagationMod
 import * as Cesium from "cesium";
 const store = useBaseStationStore()
 const selected = computed(() => store.selectedStation)
-// 添加新的响应式变量
-const isExpanded = ref(false)  // 面板是否展开
+
 const showDetails = ref(false) // 是否显示详情
 
-// 新增：切换面板显示/隐藏
-function togglePanel() {
-  isExpanded.value = !isExpanded.value
-  if (!isExpanded.value) {
-    showDetails.value = false
-  }
-}
+
 // 新增：更新射线追踪模式
 function updateRayTracingMode(antenna: Antenna) {
   // 切换模式时，先禁用其他模式
@@ -888,37 +878,7 @@ function getModelDescription(type: string): string {
 </script>
 
 <style scoped>
-/* 新增：切换按钮样式 */
-.toggle-btn {
 
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 30px;
-  height: 60px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #ccc;
-  border-left: none;
-  border-radius: 0 8px 8px 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 14px;
-  color: red;
-  transition: all 0.3s;
-  z-index: 1001;
-}
-
-.toggle-btn:hover {
-  background: rgba(33, 150, 243, 0.1);
-  color: #2196f3;
-}
-
-.toggle-btn.expanded {
-  left: 200px; /* 列表宽度 */
-}
 
 /* 修改：面板样式 */
 .panel {
@@ -943,15 +903,7 @@ function getModelDescription(type: string): string {
   border-right: 1px solid #ccc;
 }
 
-.no-selection {
-  width: 380px;
-  padding: 50px 20px;
-  text-align: center;
-  color: #666;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(5px);
-  height: 100vh;
-}
+
 .panel {
   display: flex;
   height: 100vh;
@@ -1033,12 +985,7 @@ function getModelDescription(type: string): string {
   overflow-y: auto;
 }
 
-.no-selection {
-  width: 380px;
-  padding: 50px 20px;
-  text-align: center;
-  color: #666;
-}
+
 
 .no-selection h4 {
   color: #333;
@@ -1278,27 +1225,7 @@ function getModelDescription(type: string): string {
   font-size: 12px;
   min-width: 15px;
 }
-/* 滑动动画 */
-.slide-right-enter-active,
-.slide-right-leave-active {
-  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
 
-.slide-right-enter-from {
-  transform: translateX(100%);
-  opacity: 0;
-}
-
-.slide-right-leave-to {
-  transform: translateX(100%);
-  opacity: 0;
-}
-
-.slide-right-enter-to,
-.slide-right-leave-from {
-  transform: translateX(0);
-  opacity: 1;
-}
 
 /* 详情面板头部 */
 .details-header {
@@ -1470,24 +1397,7 @@ function getModelDescription(type: string): string {
   border-radius: 3px;
   font-size: 11px;
 }
-.visualization-section {
-  margin-top: 15px;
-  padding-top: 12px;
-  border-top: 1px solid #e0e0e0;
-}
 
-.visualization-header {
-  margin-bottom: 12px;
-}
-
-.visualization-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  color: #1976d2;
-  cursor: pointer;
-}
 
 .visualization-toggle input[type="checkbox"] {
   width: 16px;
@@ -1498,23 +1408,6 @@ function getModelDescription(type: string): string {
   font-size: 13px;
 }
 
-.visualization-controls {
-  background: #f8f9ff;
-  border: 1px solid #e3f2fd;
-  border-radius: 6px;
-  padding: 12px;
-}
-
-.control-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.control-group:last-child {
-  margin-bottom: 0;
-}
 
 .control-group label {
   display: flex;
@@ -1552,10 +1445,6 @@ function getModelDescription(type: string): string {
   font-size: 11px;
 }
 
-.contour-toggle {
-  font-size: 11px;
-  gap: 6px;
-}
 
 .contour-toggle input[type="checkbox"] {
   width: 14px;

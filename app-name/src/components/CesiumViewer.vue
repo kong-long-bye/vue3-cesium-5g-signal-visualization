@@ -7,11 +7,15 @@ import { ref, onMounted, watch } from 'vue'
 import * as Cesium from 'cesium'
 import { useBaseStationStore } from '../stores/baseStations'
 import { nanoid } from 'nanoid'
-import{type SignalStrengthResult} from '../types.ts'
+import {type Building, type SignalStrengthResult} from '../types.ts'
 import { calculateBestSignal,   } from '../utils/propagationModels'
 import { AntennaRayVisualization } from '../utils/antennaVisualization'
 import { ThreeJSRayTracingManager } from '../utils/threejsRayTracing'
+import { useBuildingStore } from '../stores/buildings'
+import { getBuildingMaterial } from '../utils/buildingMaterials'
 const store = useBaseStationStore()
+const buildingStore = useBuildingStore()
+
 const cesiumContainer = ref<HTMLElement | null>(null)
 let viewer: Cesium.Viewer
 
@@ -134,6 +138,73 @@ function showInfoWindow(lon: number, lat: number, message: string) {
     if (entity) viewer.entities.remove(entity)
   }, 7000)
 }
+// 添加楼体创建函数
+function createBuilding(lon: number, lat: number) {
+  const id = nanoid()
+  const defaultMaterial = getBuildingMaterial('concrete')!
+
+  const newBuilding: Building = {
+    id,
+    name: `楼体-${id.slice(0, 4)}`,
+    longitude: lon,
+    latitude: lat,
+    height: 30,
+    width: 20,
+    length: 20,
+    floors: 10,
+    rotation: 0,
+    wallLoss: defaultMaterial.wallLoss,
+    roofLoss: defaultMaterial.roofLoss,
+    floorLoss: defaultMaterial.floorLoss,
+    materialType: 'concrete',
+    color: defaultMaterial.color,
+    opacity: 0.8
+  }
+
+  // 在3D地图中添加楼体
+  addBuildingToMap(newBuilding)
+
+  // 保存楼体数据到store
+  buildingStore.addBuilding(newBuilding)
+  buildingStore.selectBuilding(id)
+  buildingStore.setBuildingCreationMode(false) // 创建后退出创建模式
+}
+
+// 在地图上添加楼体
+function addBuildingToMap(building: Building) {
+  const buildingEntity = viewer.entities.add({
+    id: building.id,
+    position: Cesium.Cartesian3.fromDegrees(building.longitude, building.latitude, 0),
+    box: {
+      dimensions: new Cesium.Cartesian3(building.width, building.length, building.height),
+      material: Cesium.Color.fromCssColorString(building.color).withAlpha(building.opacity),
+      outline: true,
+      outlineColor: Cesium.Color.fromCssColorString(building.color).withAlpha(1.0),
+      heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+    },
+    label: {
+      text: `${building.name}\n${building.width}×${building.length}×${building.height}m\n${building.floors}层`,
+      font: '12px sans-serif',
+      pixelOffset: new Cesium.Cartesian2(0, -building.height/2 - 30),
+      fillColor: Cesium.Color.WHITE,
+      outlineColor: Cesium.Color.BLACK,
+      outlineWidth: 2,
+      style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+      heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+    }
+  })
+
+  // 设置楼体旋转
+  if (building.rotation !== 0) {
+    const heading = Cesium.Math.toRadians(building.rotation)
+    const hpr = new Cesium.HeadingPitchRoll(heading, 0, 0)
+    const orientation = Cesium.Transforms.headingPitchRollQuaternion(
+        Cesium.Cartesian3.fromDegrees(building.longitude, building.latitude, building.height/2),
+        hpr
+    )
+    buildingEntity.orientation = new Cesium.ConstantProperty(orientation)
+  }
+}
 
 
 onMounted(() => {
@@ -159,8 +230,8 @@ onMounted(() => {
   })
   // 处理地图点击事件 - 添加基站
   viewer.screenSpaceEventHandler.setInputAction((event:any) => {
-    // 检查是否处于创建模式
-    if (!store.isCreatingMode) return
+
+
     const cartesian = viewer.scene.pickPosition(event.position)
     if (!cartesian) return
 
@@ -172,6 +243,14 @@ onMounted(() => {
     const id = nanoid()
     const defaultHeight = 30 // 默认基站高度30米
 
+
+    // 检查是否处于楼体创建模式
+    if (buildingStore.isCreatingBuilding) {
+      createBuilding(lon, lat)
+      return
+    }
+    // 检查是否处于宏站创建模式
+    if (!store.isCreatingMode) return
     // 在3D地图中添加基站图标和标签
     viewer.entities.add({
       id,
@@ -305,8 +384,90 @@ onMounted(() => {
       }
     })
   }, { deep: true })
+  //监听监听楼体数据变化，实时更新3D显示
+  watch(() => buildingStore.buildings, (newBuildings) => {
+    console.log('楼体数据变化，更新地图显示')
 
-  // 监听删除基站事件
+    newBuildings.forEach(building => {
+      const entity = viewer.entities.getById(building.id)
+      if (entity && entity.box) {
+        console.log('更新楼体:', building.name)
+
+        // 更新楼体位置
+        entity.position = new Cesium.ConstantPositionProperty(
+            Cesium.Cartesian3.fromDegrees(building.longitude, building.latitude, building.height/2)
+        )
+
+        // 更新楼体尺寸
+        entity.box.dimensions = new Cesium.ConstantProperty(
+            new Cesium.Cartesian3(building.width, building.length, building.height)
+        )
+
+        // 更新楼体材质
+        entity.box.material = new Cesium.ColorMaterialProperty(
+            Cesium.Color.fromCssColorString(building.color).withAlpha(building.opacity)
+        );
+        // 更新轮廓颜色
+        entity.box.outlineColor = new Cesium.ConstantProperty(
+            Cesium.Color.fromCssColorString(building.color)
+        )
+
+        // 更新标签
+        if (entity.label) {
+          entity.label.text = new Cesium.ConstantProperty(
+              `${building.name}\n${building.width}×${building.length}×${building.height}m\n${building.floors}层`
+          )
+          entity.label.pixelOffset = new Cesium.ConstantProperty(
+              new Cesium.Cartesian2(0, -building.height/2 - 30)
+          )
+        }
+
+        // 更新旋转
+        if (building.rotation !== 0) {
+          const heading = Cesium.Math.toRadians(building.rotation)
+          const hpr = new Cesium.HeadingPitchRoll(heading, 0, 0)
+          const orientation = Cesium.Transforms.headingPitchRollQuaternion(
+              Cesium.Cartesian3.fromDegrees(building.longitude, building.latitude, building.height/2),
+              hpr
+          )
+          entity.orientation = new Cesium.ConstantProperty(orientation)
+        }
+      } else {
+        // 如果实体不存在，重新创建
+        console.log('楼体实体不存在，重新创建:', building.name)
+        addBuildingToMap(building)
+      }
+    })
+  }, { deep: true })
+
+  // 4. 修复：监听删除楼体事件
+  window.addEventListener('removeBuildingFromMap', (event:any) => {
+    const { buildingId, building } = event.detail
+    console.log('删除楼体事件:', buildingId, building?.name)
+
+    const entity = viewer.entities.getById(buildingId)
+    if (entity) {
+      viewer.entities.remove(entity)
+      console.log('楼体已从地图删除:', buildingId)
+    } else {
+      console.warn('要删除的楼体不存在:', buildingId)
+    }
+  })
+// 5. 修复：监听楼体更新事件
+  window.addEventListener('updateBuildingOnMap', (event:any) => {
+    const { buildingId, building } = event.detail
+    console.log('更新楼体事件:', buildingId, building?.name)
+
+    // 移除旧的实体
+    const oldEntity = viewer.entities.getById(buildingId)
+    if (oldEntity) {
+      viewer.entities.remove(oldEntity)
+    }
+
+    // 添加新的实体
+    addBuildingToMap(building)
+  })
+      // 监听删除基站事件
   window.addEventListener('removeStationFromMap', (event: any) => {
     const { stationId,station } = event.detail
     const entity = viewer.entities.getById(stationId)
@@ -338,6 +499,49 @@ onMounted(() => {
       duration: 2.0
     })
   })
+  // 修复：监听飞行到楼体事件 - 增加调试信息
+  window.addEventListener('flyToBuilding', (event:any) => {
+        console.log('收到飞行到楼体事件:', event)
+        console.log('Event detail:', event.detail)
+
+        if (!event.detail) {
+          console.error('飞行事件detail为空!')
+          return
+        }
+
+        const { buildingId, building, longitude, latitude, height, orientation } = event.detail
+        console.log('飞行到楼体事件详情:', {
+          buildingId,
+          buildingName: building?.name,
+          longitude,
+          latitude,
+          height
+        })
+
+        if (longitude === undefined || latitude === undefined || height === undefined) {
+          console.error('飞行坐标数据不完整:', { longitude, latitude, height })
+          return
+        }
+
+        console.log(`开始飞行到楼体: ${building?.name || buildingId} (${longitude}, ${latitude}, ${height})`)
+
+        viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, height + 150),
+          orientation: orientation || {
+            heading: Cesium.Math.toRadians(45),
+            pitch: Cesium.Math.toRadians(-30),
+            roll: 0.0
+          },
+          duration: 2.0
+        })
+      })
+
+      //修复：监听添加楼体到地图事件（用于复制功能）
+  window.addEventListener('addBuildingToMap', (event:any) => {
+    const { building } = event.detail
+    console.log('添加楼体到地图事件:', building?.name)
+    addBuildingToMap(building)
+  })
 
   // 监听清空所有基站事件
   window.addEventListener('clearAllStationsFromMap', () => {
@@ -346,7 +550,47 @@ onMounted(() => {
     threeJSRayTracingManager.clearAll()
     viewer.entities.removeAll()
   })
+// 修复：监听清空所有楼体事件 - 增加调试信息
+  window.addEventListener('clearAllBuildingsFromMap', (event) => {
+    console.log('收到清空所有楼体事件:', event)
 
+    // 移除所有楼体实体（通过box属性识别）
+    const buildingEntities: Cesium.Entity[] = []
+    viewer.entities.values.forEach(entity => {
+      if (entity.box) { // 识别楼体实体（有box属性）
+        buildingEntities.push(entity)
+      }
+    })
+
+    console.log(`找到 ${buildingEntities.length} 个楼体实体待删除`)
+
+    buildingEntities.forEach((entity, index) => {
+      console.log(`删除楼体实体 ${index + 1}:`, entity.id)
+      viewer.entities.remove(entity)
+    })
+
+    console.log(`✅ 已清空 ${buildingEntities.length} 个楼体`)
+  })
+
+// 修复：监听添加楼体到地图事件 - 增加调试信息
+  window.addEventListener('addBuildingToMap', (event:any) => {
+    console.log('收到添加楼体到地图事件:', event)
+    console.log('Event detail:', event.detail)
+
+    if (!event.detail) {
+      console.error('添加楼体事件detail为空!')
+      return
+    }
+
+    const { building } = event.detail
+    if (!building) {
+      console.error('添加楼体事件中building为空!')
+      return
+    }
+
+    console.log('添加楼体到地图:', building.name, building.id)
+    addBuildingToMap(building)
+  })
   // 监听重新加载基站事件（用于数据导入）
   window.addEventListener('reloadStationsOnMap', (event: any) => {
     const { stations } = event.detail
