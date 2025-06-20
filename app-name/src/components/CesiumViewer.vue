@@ -43,7 +43,7 @@ function showSignalStrengthInfo(
   infoText += `传播模型: ${bestSignal.model}\n`
 
   if (results.length > 1) {
-    infoText += `\n📊 其他信号源 (${results.length - 1}个):\n`
+    infoText += `\n其他信号源 (${results.length - 1}个):\n`
     results.slice(1, 4).forEach((result, index) => {
       const station = store.stations.find(s => s.id === result.stationId)
       infoText += `${index + 2}. ${station?.name}: ${result.rssi.toFixed(1)} dBm\n`
@@ -175,12 +175,12 @@ onMounted(() => {
     // 在3D地图中添加基站图标和标签
     viewer.entities.add({
       id,
-      position: Cesium.Cartesian3.fromDegrees(lon, lat, defaultHeight),
+      position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
       billboard: {
-        image: '/station-icon.png',
-        scale: 0.6,
+        image: '/station-icon1.png',
+        scale: 0.1,
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-        heightReference: Cesium.HeightReference.NONE
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
       },
       label: {
         text: `宏站-${id.slice(0, 4)}\n高度: ${defaultHeight}m`,

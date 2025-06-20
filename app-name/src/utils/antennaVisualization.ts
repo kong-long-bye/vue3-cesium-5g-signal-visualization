@@ -85,48 +85,7 @@ function calculateSphericalPoint(
     )
 }
 
-/**
- * 创建单个扇形区域的几何体
- */
-function createSectorGeometry(
-    centerLon: number,
-    centerLat: number,
-    centerHeight: number,
-    startAzimuth: number,
-    endAzimuth: number,
-    startElevation: number,
-    endElevation: number,
-    innerRadius: number,
-    outerRadius: number,
-    radialSteps: number = 10,
-    angularSteps: number = 10
-): Cesium.Cartesian3[] {
-    const positions: Cesium.Cartesian3[] = []
 
-    // 生成扇形的顶点
-    for (let i = 0; i <= radialSteps; i++) {
-        const radius = innerRadius + (outerRadius - innerRadius) * (i / radialSteps)
-
-        for (let j = 0; j <= angularSteps; j++) {
-            const azimuth = startAzimuth + (endAzimuth - startAzimuth) * (j / angularSteps)
-
-            // 为每个方位角创建两个点（上下边界）
-            const bottomPoint = calculateSphericalPoint(
-                centerLon, centerLat, centerHeight,
-                radius, azimuth, startElevation
-            )
-
-            const topPoint = calculateSphericalPoint(
-                centerLon, centerLat, centerHeight,
-                radius, azimuth, endElevation
-            )
-
-            positions.push(bottomPoint, topPoint)
-        }
-    }
-
-    return positions
-}
 
 /**
  * 为天线创建3D射线可视化
@@ -249,9 +208,7 @@ export class AntennaRayVisualization {
         }
     }
 
-    /**
-     * 创建单个扇形实体
-     */
+
     /**
      * 创建单个扇形实体 - 使用Polyline
      */

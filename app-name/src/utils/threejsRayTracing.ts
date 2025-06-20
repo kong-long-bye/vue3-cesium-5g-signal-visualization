@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium'
 import type { BaseStation, Antenna } from '../types'
-
+import workerpool from 'workerpool'
+import {traceRayWorker} from '../utils/threejsRayTraceWorker'
 // 3D射线追踪配置
 export interface ThreeJSRayTracingConfig {
     enabled: boolean
@@ -37,10 +38,13 @@ export interface RayTrajectory {
 export class ThreeJSRayTracingCore {
     private config: ThreeJSRayTracingConfig
     private viewer: Cesium.Viewer
-
+    private pool;//进程池
     constructor(viewer: Cesium.Viewer, config: ThreeJSRayTracingConfig) {
         this.viewer = viewer
         this.config = config
+        this.pool = workerpool.pool(new URL('./traceRayWorker.ts', import.meta.url).href, {
+            maxWorkers: navigator.hardwareConcurrency
+        });
     }
 
     updateConfig(newConfig: Partial<ThreeJSRayTracingConfig>): void {
@@ -50,6 +54,23 @@ export class ThreeJSRayTracingCore {
     /**
      * 计算3D射线追踪 - 核心算法
      */
+    /**
+    这个使用webworker进行并行计算，
+    const tasks = [];
+    for (let az = -this.config.azimuthAngle / 2; az <= this.config.azimuthAngle / 2; az += azStep) {
+      for (let el = -this.config.elevationAngle / 2; el <= this.config.elevationAngle / 2; el += elStep) {
+        tasks.push(
+          this.pool.exec('traceRay', [antennaPos, antenna, az, el, distStep, this.config])
+        );
+      }
+    }
+
+    const results = await Promise.all(tasks);
+    // 过滤空轨迹并打印进度
+    const trajectories = results.filter(r => r.points.length > 0);
+    console.log(`总共完成 ${trajectories.length} 条射线`);
+    return trajectories;
+    */
     calculateRayTracing(station: BaseStation, antenna: Antenna): RayTrajectory[] {
         if (!this.config.enabled) return []
 
@@ -62,7 +83,6 @@ export class ThreeJSRayTracingCore {
         const distanceStep = this.config.maxRange / (this.config.density * 15)
 
         console.log(`开始3D射线追踪计算: ${Math.ceil(this.config.azimuthAngle / azimuthStep)} x ${Math.ceil(this.config.elevationAngle / elevationStep)} 条射线`)
-
         // 生成3D扇形射线网格
         for (let az = -this.config.azimuthAngle / 2; az <= this.config.azimuthAngle / 2; az += azimuthStep) {
             for (let el = -this.config.elevationAngle / 2; el <= this.config.elevationAngle / 2; el += elevationStep) {
@@ -72,6 +92,7 @@ export class ThreeJSRayTracingCore {
                 }
             }
         }
+        console.log(`总共完成 ${trajectories.length} 条射线`);
 
         return trajectories
     }
@@ -261,7 +282,7 @@ export class ThreeJSRayTracingRenderer {
     /**
      * 渲染3D射线追踪结果
      */
-    renderRayTracing(trajectories: RayTrajectory[], antennaId: string): void {
+    async  renderRayTracing(trajectories: RayTrajectory[], antennaId: string): Promise<void> {
         this.clearAntenna(antennaId)
 
         trajectories.forEach((trajectory, index) => {
@@ -425,7 +446,7 @@ export class ThreeJSRayTracingManager {
             showRays: true,             // 显示射线
             animateSignals: true,       // 信号脉动
             rayOpacity: 0.4,            // 射线透明度
-            signalPointSize: 8          // 信号点大小
+            signalPointSize: 4          // 信号点大小
         }
 
         this.config = { ...defaultConfig, ...config }
@@ -474,11 +495,11 @@ export class ThreeJSRayTracingManager {
         try {
             // 使用Three.js算法计算射线追踪
             const trajectories = this.core.calculateRayTracing(station, antenna)
-
+            console.log('计算完毕')
             // 渲染结果
             this.renderer.renderRayTracing(trajectories, antenna.id)
 
-            console.log(`Three.js风格3D射线追踪完成: ${trajectories.length} 条射线`)
+            console.log(`Three.js风格3D射线追踪完成: ${(trajectories).length} 条射线`)
         } catch (error) {
             console.error('Three.js风格3D射线追踪失败:', error)
         }

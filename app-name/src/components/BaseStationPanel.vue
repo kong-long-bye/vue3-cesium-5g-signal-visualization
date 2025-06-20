@@ -232,7 +232,7 @@
             <div class="model-description">
               <small>{{ getModelDescription(antenna.propagationModel.type) }}</small>
             </div>
-            <!-- 模型参数配置（如果有的话） -->
+
             <div v-if="antenna.propagationModel.parameters" class="model-parameters">
 
               <div v-if="antenna.propagationModel.type === 'cost-231-hata'" class="param-group">
@@ -297,11 +297,9 @@
                 <span class="mode-text">🎯 3D立体射线追踪</span>
                 <small class="mode-desc">Three.js风格的真实3D效果</small>
               </label>
-
-
             </div>
           </div>
-          <!-- 📐 几何射线追踪配置 - 新增 -->
+          <!-- 📐 几何射线追踪配置 -->
           <div v-if="antenna.rayTracingType === 'geometric'" class="geometric-raytracing-section">
             <div class="geometric-header">
               <h5>📐 几何射线追踪配置</h5>
@@ -758,7 +756,7 @@ function addAntenna() {
       showRays: true,
       animateSignals: true,
       rayOpacity: 0.4,
-      signalPointSize: 8
+      signalPointSize: 4
     },
     rayTracingType: 'geometric'
   }

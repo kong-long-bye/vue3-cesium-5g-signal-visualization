@@ -89,7 +89,7 @@ function freeSpacePathLoss(distance: number, frequency: number): number {
 }
 
 /**
- * COST-231-Hata 模型（简化版）
+ * COST-231-Hata 模型
  * @param distance 距离（米）
  * @param frequency 频率（MHz）
  * @param hb 基站高度（米）
