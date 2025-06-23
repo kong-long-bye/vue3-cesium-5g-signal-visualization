@@ -188,7 +188,7 @@ export class AntennaRayVisualization {
 
                     // 计算信号强度
                     const signalResult = calculateSignalStrength(
-                        station, antenna, targetLat, targetLon, targetHeight
+                        station, antenna, targetLat, targetLon, targetHeight,this.viewer
                     )
 
                     // 创建扇形区域

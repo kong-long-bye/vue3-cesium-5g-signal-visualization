@@ -2,6 +2,8 @@ import * as Cesium from 'cesium'
 import type { BaseStation, Antenna } from '../types'
 import workerpool from 'workerpool'
 import {traceRayWorker} from '../utils/threejsRayTraceWorker'
+import { calculateSignalStrength } from '../utils/propagationModels'
+
 // 3D射线追踪配置
 export interface ThreeJSRayTracingConfig {
     enabled: boolean
@@ -136,7 +138,7 @@ export class ThreeJSRayTracingCore {
             if (this.config.showObstacles) {
                 blocked = this.checkRayOcclusion(antennaPos, rayPoint)
             }
-
+            blocked = false // 这里暂时禁用遮挡检测，实际应用中可以启用
             if (!blocked) {
                 // 计算该点的信号强度（基于Three.js算法）
                 const signalStrength = this.calculateSignalStrength(dist, azimuth, elevation, antenna)

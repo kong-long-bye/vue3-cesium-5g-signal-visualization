@@ -13,6 +13,7 @@ import { AntennaRayVisualization } from '../utils/antennaVisualization'
 import { ThreeJSRayTracingManager } from '../utils/threejsRayTracing'
 import { useBuildingStore } from '../stores/buildings'
 import { getBuildingMaterial } from '../utils/buildingMaterials'
+import {getWallPenetrationDetector} from "../utils/wallPenetrationDetector.ts";
 const store = useBaseStationStore()
 const buildingStore = useBuildingStore()
 
@@ -52,6 +53,31 @@ function showSignalStrengthInfo(
       const station = store.stations.find(s => s.id === result.stationId)
       infoText += `${index + 2}. ${station?.name}: ${result.rssi.toFixed(1)} dBm\n`
     })
+  }
+// 如果使用AWM模型，显示详细信息
+  if (bestSignal.awmDetails) {
+    const awm = bestSignal.awmDetails
+    infoText += `\n--- AWM模型详情 ---\n`
+    infoText += `自由空间损耗: ${awm.breakdown.freeSpaceLoss.toFixed(2)} dB\n`
+    infoText += `穿透墙体数: ${awm.penetrationResult.wallCount}\n`
+    infoText += `墙体损耗: ${awm.breakdown.wallLoss.toFixed(2)} dB\n`
+    infoText += `阴影衰落: ${awm.breakdown.shadowFading.toFixed(2)} dB\n`
+
+    if (awm.penetrationResult.penetratedBuildings.length > 0) {
+      infoText += `穿透楼体:\n`
+      awm.penetrationResult.penetratedBuildings.slice(0, 3).forEach((building: any, index: number) => {
+        infoText += `  ${index + 1}. ${building.building.name} (${building.penetrationPoints}墙)\n`
+      })
+    }
+
+    // 可视化穿透路径
+    const detector = getWallPenetrationDetector(viewer)
+    detector.visualizePenetrationPath(awm.penetrationResult, `awm-path-${bestSignal.antennaId}`)
+
+    // 3秒后清除路径可视化
+    setTimeout(() => {
+      detector.clearVisualization(`awm-path-${bestSignal.antennaId}`)
+    }, 5000)
   }
 
   // 在地图上显示查询点和信息
@@ -343,7 +369,7 @@ onMounted(() => {
     const height = 1.5 // 默认接收点高度1.5米
 
     // 计算所有基站天线的信号强度
-    const signalResults = calculateBestSignal(store.stations, lat, lon, height)
+    const signalResults = calculateBestSignal(store.stations, lat, lon, height,viewer)
 
     if (signalResults.length === 0) {
       showInfoWindow(lon, lat, '没有可用的基站信号')

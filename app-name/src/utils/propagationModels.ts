@@ -1,4 +1,5 @@
 import type { PropagationModel, Antenna, BaseStation, SignalStrengthResult } from '../types'
+import {detectWallPenetration, type WallPenetrationResult} from "./wallPenetrationDetector.ts";
 
 // 预定义的传播模型
 export const PROPAGATION_MODELS: PropagationModel[] = [
@@ -27,14 +28,14 @@ export const PROPAGATION_MODELS: PropagationModel[] = [
         }
     },
     {
-        type: 'ray-tracing',
-        name: 'Ray-Tracing 射线追踪',
-        description: '基于几何光学理论的精确传播模型，考虑反射、绕射、散射等多径传播效应，计算精度高但复杂度大',
+        type: 'average-wall-loss-model',
+        name: '平均墙体损耗模型',
+        description: '平均墙损模型，公式：PL = 32.4 + 20×log10(d) + 20×log10(fc) + W_avg×N_walls + X_σ',
         parameters: {
-            maxReflections: 3,
-            minSignalLevel: -120
+            shadowFading: 6
         }
     }
+
 ]
 
 /**
@@ -123,6 +124,79 @@ function cost231HataPathLoss(
 }
 
 /**
+ * 平均墙损模型(Average Wall Model, AWM)实现
+ *
+ * PL(d) = PL_fs + W_avg × N_walls + X_σ
+ *
+ * 其中：
+ * PL_fs = 32.4 + 20*log10(d_m) + 20*log10(fc_GHz) [dB]
+ * W_avg: 平均墙损 [dB/墙]
+ * N_walls: 穿透墙体数量
+ * X_σ: 阴影衰落 [dB]
+ *
+ * @param startLocation 起点位置
+ * @param endLocation 终点位置
+ * @param distance 距离（米）
+ * @param frequency 频率（MHz）
+ * @param X_σ 阴影衰落 (dB)
+ * @param viewer Cesium视图器（用于3D检测，可选）
+ * @returns 路径损耗结果和详细信息
+ */
+export function averageWallLossPathLoss(
+    startLocation: { lat: number, lon: number, height: number },
+    endLocation: { lat: number, lon: number, height: number },
+    distance: number,
+    frequency: number,
+    X_σ: number = 0,
+    viewer?: any
+): {
+    pathLoss: number
+    penetrationResult: WallPenetrationResult
+    breakdown: {
+        freeSpaceLoss: number
+        wallLoss: number
+        shadowFading: number
+        total: number
+    }
+} {
+    // 计算自由空间路径损耗
+    const PL_fs = freeSpacePathLoss(distance, frequency)
+
+    // 检测穿过的墙体
+    const penetrationResult = detectWallPenetration(startLocation, endLocation, viewer)
+
+    // 计算墙体损耗
+    const W_avg = penetrationResult.averageWallLoss
+    const N_walls = penetrationResult.wallCount
+    const wallLoss = W_avg * N_walls
+
+    // 计算总路径损耗
+    const totalPathLoss = PL_fs + wallLoss + X_σ
+
+    console.log(`AWM模型计算:
+        距离: ${distance.toFixed(1)}m
+        频率: ${frequency}MHz
+        自由空间损耗: ${PL_fs.toFixed(2)}dB
+        穿透墙体数: ${N_walls}
+        平均墙损: ${W_avg.toFixed(2)}dB/墙
+        总墙体损耗: ${wallLoss.toFixed(2)}dB
+        阴影衰落: ${X_σ}dB
+        总路径损耗: ${totalPathLoss.toFixed(2)}dB`)
+
+    return {
+        pathLoss: totalPathLoss,
+        penetrationResult,
+        breakdown: {
+            freeSpaceLoss: PL_fs,
+            wallLoss: wallLoss,
+            shadowFading: X_σ,
+            total: totalPathLoss
+        }
+    }
+}
+
+
+/**
  * 计算信号强度
  * @param station 基站信息
  * @param antenna 天线信息
@@ -136,7 +210,8 @@ export function calculateSignalStrength(
     antenna: Antenna,
     targetLat: number,
     targetLon: number,
-    targetHeight: number = 1.5
+    targetHeight: number = 1.5,
+    viewer: any
 ): SignalStrengthResult {
     // 计算天线实际位置
     const antennaHeight = station.height + antenna.height
@@ -149,7 +224,7 @@ export function calculateSignalStrength(
 
     // 根据传播模型类型计算路径损耗
     let pathLoss: number
-
+    let awmDetails: any = undefined
     switch (antenna.propagationModel.type) {
         case 'free-space':
             pathLoss = freeSpacePathLoss(distance, antenna.frequency)
@@ -172,11 +247,38 @@ export function calculateSignalStrength(
                 (antenna.propagationModel.parameters?.floors || 1) * 15
             break
 
-        case 'ray-tracing':
-            // Ray-tracing模型简化为自由空间+多径衰减
-            pathLoss = freeSpacePathLoss(distance, antenna.frequency) + Math.random() * 10
-            break
+        case 'average-wall-loss-model':
+            // 使用AWM模型
+            const startLocation = {
+                lat: station.latitude,
+                lon: station.longitude,
+                height: antennaHeight
+            }
+            const endLocation = {
+                lat: targetLat,
+                lon: targetLon,
+                height: targetHeight
+            }
+            // 类型安全的参数获取
+            const shadowFading = typeof antenna.propagationModel.parameters?.shadowFading === 'number'
+                ? antenna.propagationModel.parameters.shadowFading
+                : 0
 
+            const awmResult = averageWallLossPathLoss(
+                startLocation,
+                endLocation,
+                distance,
+                antenna.frequency,
+                shadowFading,
+                viewer
+            )
+
+            pathLoss = awmResult.pathLoss
+            awmDetails = {
+                penetrationResult: awmResult.penetrationResult,
+                breakdown: awmResult.breakdown
+            }
+            break
         default:
             pathLoss = freeSpacePathLoss(distance, antenna.frequency)
     }
@@ -200,23 +302,46 @@ export function calculateSignalStrength(
  * @param targetLat 目标纬度
  * @param targetLon 目标经度
  * @param targetHeight 目标高度
+ * @param viewer
  * @returns 最强信号结果数组（按信号强度降序）
  */
 export function calculateBestSignal(
     stations: BaseStation[],
     targetLat: number,
     targetLon: number,
-    targetHeight: number = 1.5
+    targetHeight: number = 1.5,
+    viewer: any
 ): SignalStrengthResult[] {
     const results: SignalStrengthResult[] = []
 
     stations.forEach(station => {
         station.antennas.forEach(antenna => {
-            const result = calculateSignalStrength(station, antenna, targetLat, targetLon, targetHeight)
+            const result = calculateSignalStrength(station, antenna, targetLat, targetLon, targetHeight,viewer)
             results.push(result)
         })
     })
 
     // 按信号强度降序排序
     return results.sort((a, b) => b.rssi - a.rssi)
+}
+
+/**
+ * 获取AWM模型支持的参数配置
+ */
+export function getAWMModelConfig(): {
+    shadowFadingRange: { min: number, max: number, default: number }
+    detectionMethods: Array<{ value: string, label: string }>
+} {
+    return {
+        shadowFadingRange: {
+            min: 0,
+            max: 15,
+            default: 0
+        },
+        detectionMethods: [
+            { value: 'auto', label: '自动检测' },
+            { value: 'cesium3d', label: 'Cesium 3D射线投射' },
+            { value: 'geometric', label: '几何算法' }
+        ]
+    }
 }

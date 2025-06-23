@@ -222,7 +222,8 @@
                 <option value="free-space">Free-Space 自由空间</option>
                 <option value="cost-231-hata">COST-231-Hata 城市</option>
                 <option value="itu-indoor">ITU 室内</option>
-                <option value="ray-tracing">Ray-Tracing 射线追踪</option>
+
+                <option value="average-wall-loss-model">平均墙损模型</option>
               </select>
             </label>
             <!-- 模型描述信息 -->
@@ -262,6 +263,9 @@
                       step="1"
                   />
                 </label>
+              </div>
+              <div v-if="antenna.propagationModel.type === 'average-wall-loss-model'" class="param-group">
+
               </div>
             </div>
           </div>

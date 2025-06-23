@@ -1,13 +1,32 @@
 
 // 传播模型类型
-export type PropagationModelType = 'free-space' | 'cost-231-hata' | 'itu-indoor' | 'ray-tracing'
+export type PropagationModelType = 'free-space' | 'cost-231-hata' | 'itu-indoor' | 'average-wall-loss-model'
 
 // 传播模型配置接口
 export interface PropagationModel {
     type: PropagationModelType
     name: string
     description: string
-    parameters?: Record<string, number>
+    parameters?: {
+        // COST-231-Hata 模型参数
+        cityType?: number        // 1=大城市, 0=中小城市
+        terrainType?: number     // 1=城市, 0=郊区
+
+        // ITU 室内模型参数
+        floors?: number          // 楼层数
+        wallLoss?: number        // 墙体损耗
+
+        // Ray-Tracing 模型参数
+        maxReflections?: number  // 最大反射次数
+        minSignalLevel?: number  // 最小信号电平
+
+        // AWM 平均墙损模型参数
+        shadowFading?: number    // 阴影衰落 (dB)
+        enableDetection?: boolean // 是否启用自动检测
+
+        // 允许其他扩展参数
+        [key: string]: number | boolean | undefined
+    }
 }
 
 
@@ -44,6 +63,15 @@ export interface SignalStrengthResult {
     antennaId: string      // 天线ID
     stationId: string      // 基站ID
     model: string          // 使用的传播模型
+    awmDetails?: {         // AWM模型详细信息（可选）
+        penetrationResult: any
+        breakdown: {
+            freeSpaceLoss: number
+            wallLoss: number
+            shadowFading: number
+            total: number
+        }
+    }
 }
 // 天线可视化配置ort interface AntennaVisualizationConfig {
 
