@@ -150,7 +150,7 @@ export class AntennaRayVisualization {
         const verticalStep = config.verticalBeamWidth / config.verticalSteps
 
         // 距离分层（同心圆）
-        const distanceSteps = 5 // 5个距离层
+        const distanceSteps = 10 // 5个距离层
         const maxDistance = config.maxDistance
 
         // 生成每个小扇形区域

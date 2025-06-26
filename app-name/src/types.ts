@@ -108,7 +108,21 @@ export type RayTracingType = 'geometric' | 'threejs'
 
 
 
-// ========== 新增：楼体相关类型定义 ==========
+
+// ========== 新增：楼体来源和3D Tiles相关类型 ==========
+// 3D Tiles相关类型 - 新增
+export interface TilesetInfo {
+    filePath: string        // tileset.json文件路径
+    boundingVolume: {       // 边界体积
+        center: [number, number, number]  // 中心点 [经度, 纬度, 高度]
+        dimensions: [number, number, number] // 尺寸 [宽, 长, 高]
+    }
+    geometricError: number  // 几何误差
+    refine: string         // 细化方式
+}
+
+// 楼体来源类型 - 新增
+export type BuildingSourceType = 'manual' | 'imported'
 
 // 楼体接口定义
 export interface Building {
@@ -127,6 +141,10 @@ export interface Building {
     rotation: number       // 旋转角度（度，0为正北）
     color: string          // 楼体颜色（十六进制）
     opacity: number        // 透明度 0-1
+    // 新增属性
+    sourceType: BuildingSourceType    // 楼体来源：手动创建 or 导入
+    tilesetInfo?: TilesetInfo        // 3D Tiles信息（仅导入楼体有此字段）
+    originalPath?: string            // 原始文件路径（仅导入楼体）
 }
 
 // 建筑材料类型
@@ -142,8 +160,14 @@ export interface BuildingMaterial {
     color: string          // 默认颜色
 }
 
-// 楼体创建模式状态
-export interface BuildingCreationState {
-    isCreatingBuilding: boolean
-    selectedBuildingId: string | null
+// 3D Tiles导入结果
+export interface TilesImportResult {
+    success: boolean
+    importedCount: number
+    failedCount: number
+    buildings: Building[]
+    errors: string[]
 }
+
+
+

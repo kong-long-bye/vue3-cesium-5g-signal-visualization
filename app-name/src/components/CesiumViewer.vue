@@ -19,7 +19,8 @@ const buildingStore = useBuildingStore()
 
 const cesiumContainer = ref<HTMLElement | null>(null)
 let viewer: Cesium.Viewer
-
+// 新增：3D Tiles相关的Map来存储tileset实例
+const tilesetMap = new Map<string, Cesium.Cesium3DTileset>()
 
 // 显示信号强度信息窗口
 function showSignalStrengthInfo(
@@ -184,9 +185,12 @@ function createBuilding(lon: number, lat: number) {
     floorLoss: defaultMaterial.floorLoss,
     materialType: 'concrete',
     color: defaultMaterial.color,
-    opacity: 0.8
-  }
+    opacity: 0.8,
+    sourceType: 'manual' // 新增：标记为手动创建
 
+  }
+  console.log('🏗️ 创建新楼体:', newBuilding) // 🔍 添加调试日志
+  console.log('楼体sourceType:', newBuilding.sourceType)
   // 在3D地图中添加楼体
   addBuildingToMap(newBuilding)
 
@@ -198,6 +202,88 @@ function createBuilding(lon: number, lat: number) {
 
 // 在地图上添加楼体
 function addBuildingToMap(building: Building) {
+  if (building.sourceType === 'imported' && building.tilesetInfo) {
+    addTilesetToMap(building)
+  } else {
+    // 原有的Box渲染逻辑保持不变
+    addBoxBuildingToMap(building)
+  }
+
+}
+// 新增：添加3D Tiles楼体到地图
+function addTilesetToMap(building: Building) {
+  if (!building.tilesetInfo || !building.originalPath) return
+
+  try {
+    // 构建tileset URL（这里需要根据实际情况调整）
+    const tilesetUrl = `./3dtitlebuilding/${building.originalPath}/tileset.json`
+
+    // 创建3D Tileset
+    const tileset = viewer.scene.primitives.add(
+        new Cesium.Cesium3DTileset({
+          url: tilesetUrl,
+          show: true,
+          // 可选：调整tileset的位置和缩放
+          modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(
+              Cesium.Cartesian3.fromDegrees(
+                  building.longitude,
+                  building.latitude,
+                  0
+              )
+          )
+        })
+    )
+
+    // 存储tileset引用
+    tilesetMap.set(building.id, tileset)
+
+    // 设置tileset属性
+    tileset.readyPromise.then(() => {
+      console.log(`3D Tileset ${building.name} 加载完成`)
+
+      // 应用楼体的透明度设置
+      tileset.style = new Cesium.Cesium3DTileStyle({
+        color: {
+          conditions: [
+            ['true', `color('${building.color}', ${building.opacity})`]
+          ]
+        }
+      })
+    }).catch(error => {
+      console.error(`3D Tileset ${building.name} 加载失败:`, error)
+      // 如果3D Tiles加载失败，回退到Box渲染
+      addBoxBuildingToMap(building)
+    })
+
+    // 添加标签
+    viewer.entities.add({
+      id: `${building.id}_label`,
+      position: Cesium.Cartesian3.fromDegrees(
+          building.longitude,
+          building.latitude,
+          building.height + 10
+      ),
+      label: {
+        text: `${building.name}\n${building.width}×${building.length}×${building.height}m\n${building.floors}层\n[3D Tiles]`,
+        font: '12px sans-serif',
+        pixelOffset: new Cesium.Cartesian2(0, -30),
+        fillColor: Cesium.Color.WHITE,
+        outlineColor: Cesium.Color.BLACK,
+        outlineWidth: 2,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+      }
+    })
+
+  } catch (error) {
+    console.error(`添加3D Tileset ${building.name} 失败:`, error)
+    // 回退到Box渲染
+    addBoxBuildingToMap(building)
+  }
+}
+
+// 新增：原有的Box楼体渲染逻辑（从原来的addBuildingToMap中提取）
+function addBoxBuildingToMap(building: Building) {
   const buildingEntity = viewer.entities.add({
     id: building.id,
     position: Cesium.Cartesian3.fromDegrees(building.longitude, building.latitude, 0),
@@ -411,60 +497,90 @@ onMounted(() => {
     })
   }, { deep: true })
   //监听监听楼体数据变化，实时更新3D显示
-  watch(() => buildingStore.buildings, (newBuildings) => {
-    console.log('楼体数据变化，更新地图显示')
+      watch(() => buildingStore.buildings, (newBuildings) => {
+        console.log('楼体数据变化，更新地图显示')
 
-    newBuildings.forEach(building => {
-      const entity = viewer.entities.getById(building.id)
-      if (entity && entity.box) {
-        console.log('更新楼体:', building.name)
+        newBuildings.forEach(building => {
+          // 检查是否是3D Tiles楼体
+          if (building.sourceType === 'imported' && building.tilesetInfo) {
+            // 3D Tiles楼体的更新逻辑
+            const tileset = tilesetMap.get(building.id)
+            if (tileset) {
+              // 更新3D Tiles的样式
+              tileset.style = new Cesium.Cesium3DTileStyle({
+                color: {
+                  conditions: [
+                    ['true', `color('${building.color}', ${building.opacity})`]
+                  ]
+                }
+              })
+            } else {
+              // 如果tileset不存在，重新创建
+              addTilesetToMap(building)
+            }
 
-        // 更新楼体位置
-        entity.position = new Cesium.ConstantPositionProperty(
-            Cesium.Cartesian3.fromDegrees(building.longitude, building.latitude, building.height/2)
-        )
+            // 更新标签
+            const labelEntity = viewer.entities.getById(`${building.id}_label`)
+            if (labelEntity && labelEntity.label) {
+              labelEntity.position = new Cesium.ConstantPositionProperty(
+                  Cesium.Cartesian3.fromDegrees(building.longitude, building.latitude, building.height + 10)
+              )
+              labelEntity.label.text = new Cesium.ConstantProperty(
+                  `${building.name}\n${building.width}×${building.length}×${building.height}m\n${building.floors}层\n[3D Tiles]`
+              )
+            }
+          } else {
+            // 原有的Box楼体更新逻辑保持不变
+            const entity = viewer.entities.getById(building.id)
+            if (entity && entity.box) {
+              console.log('更新楼体:', building.name)
 
-        // 更新楼体尺寸
-        entity.box.dimensions = new Cesium.ConstantProperty(
-            new Cesium.Cartesian3(building.width, building.length, building.height)
-        )
+              // 更新楼体位置
+              entity.position = new Cesium.ConstantPositionProperty(
+                  Cesium.Cartesian3.fromDegrees(building.longitude, building.latitude, building.height/2)
+              )
 
-        // 更新楼体材质
-        entity.box.material = new Cesium.ColorMaterialProperty(
-            Cesium.Color.fromCssColorString(building.color).withAlpha(building.opacity)
-        );
-        // 更新轮廓颜色
-        entity.box.outlineColor = new Cesium.ConstantProperty(
-            Cesium.Color.fromCssColorString(building.color)
-        )
+              // 更新楼体尺寸
+              entity.box.dimensions = new Cesium.ConstantProperty(
+                  new Cesium.Cartesian3(building.width, building.length, building.height)
+              )
 
-        // 更新标签
-        if (entity.label) {
-          entity.label.text = new Cesium.ConstantProperty(
-              `${building.name}\n${building.width}×${building.length}×${building.height}m\n${building.floors}层`
-          )
-          entity.label.pixelOffset = new Cesium.ConstantProperty(
-              new Cesium.Cartesian2(0, -building.height/2 - 30)
-          )
-        }
+              // 更新楼体材质
+              entity.box.material = new Cesium.ColorMaterialProperty(
+                  Cesium.Color.fromCssColorString(building.color).withAlpha(building.opacity)
+              );
+              // 更新轮廓颜色
+              entity.box.outlineColor = new Cesium.ConstantProperty(
+                  Cesium.Color.fromCssColorString(building.color)
+              )
 
-        // 更新旋转
-        if (building.rotation !== 0) {
-          const heading = Cesium.Math.toRadians(building.rotation)
-          const hpr = new Cesium.HeadingPitchRoll(heading, 0, 0)
-          const orientation = Cesium.Transforms.headingPitchRollQuaternion(
-              Cesium.Cartesian3.fromDegrees(building.longitude, building.latitude, building.height/2),
-              hpr
-          )
-          entity.orientation = new Cesium.ConstantProperty(orientation)
-        }
-      } else {
-        // 如果实体不存在，重新创建
-        console.log('楼体实体不存在，重新创建:', building.name)
-        addBuildingToMap(building)
-      }
-    })
-  }, { deep: true })
+              // 更新标签
+              if (entity.label) {
+                entity.label.text = new Cesium.ConstantProperty(
+                    `${building.name}\n${building.width}×${building.length}×${building.height}m\n${building.floors}层`
+                )
+                entity.label.pixelOffset = new Cesium.ConstantProperty(
+                    new Cesium.Cartesian2(0, -building.height/2 - 30)
+                )
+              }
+
+              // 更新旋转
+              if (building.rotation !== 0) {
+                const heading = Cesium.Math.toRadians(building.rotation)
+                const hpr = new Cesium.HeadingPitchRoll(heading, 0, 0)
+                const orientation = Cesium.Transforms.headingPitchRollQuaternion(
+                    Cesium.Cartesian3.fromDegrees(building.longitude, building.latitude, building.height/2),
+                    hpr
+                )
+                entity.orientation = new Cesium.ConstantProperty(orientation)
+              }
+            } else {
+              addBoxBuildingToMap(building)
+            }
+          }
+        })
+      }, { deep: true })
+
 
   // 4. 修复：监听删除楼体事件
   window.addEventListener('removeBuildingFromMap', (event:any) => {

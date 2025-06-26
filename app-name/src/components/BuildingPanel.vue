@@ -3,27 +3,101 @@
     <!-- 楼体列表 -->
     <div class="list">
       <h3>楼体列表 ({{ buildingStore.totalBuildings }})</h3>
-      <ul v-if="buildingStore.totalBuildings > 0">
-        <li
-            v-for="building in buildingStore.buildings"
-            :key="building.id"
-            @click="selectAndShowDetails(building.id)"
-            :class="{ active: building.id === buildingStore.selectedBuildingId }"
-        >
-          <span>{{ building.name }}</span>
-          <small>{{ building.width }}×{{ building.length }}×{{ building.height }}m ({{ building.floors }}层)</small>
-        </li>
-      </ul>
 
-      <!-- 空状态 -->
-      <div v-else class="empty-state">
-        <p>🏢 暂无楼体</p>
-        <small>点击下方按钮开始创建</small>
+      <!-- 导入楼体按钮 -->
+      <div class="import-section">
+        <button
+            @click="importTilesBuildings"
+            :disabled="buildingStore.isImporting"
+            class="btn-import"
+        >
+          {{ buildingStore.isImporting ? '📁 导入中...' : '📁 导入3D Tiles楼体' }}
+        </button>
+
+        <!-- 导入进度显示 -->
+        <div v-if="buildingStore.isImporting" class="import-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: importProgress + '%' }"></div>
+          </div>
+          <small>正在导入楼体数据...</small>
+        </div>
+
+        <!-- 导入结果显示 -->
+        <div v-if="showImportResult && buildingStore.lastImportResult" class="import-result">
+          <div :class="['result-message', buildingStore.lastImportResult.success ? 'success' : 'error']">
+            {{ getImportResultMessage() }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 分类楼体列表 -->
+      <div class="building-categories">
+        <!-- 自建楼体分类 -->
+        <div class="category-section">
+          <div
+              class="category-header"
+              @click="toggleManualBuildings"
+              :class="{ expanded: showManualBuildings }"
+          >
+            <span class="category-icon">{{ showManualBuildings ? '▼' : '▶' }}</span>
+            <span class="category-title">📝 自建楼体 ({{ buildingStore.manualBuildingsCount }})</span>
+          </div>
+
+          <div v-if="showManualBuildings" class="category-content">
+            <ul v-if="buildingStore.manualBuildingsCount > 0">
+              <li
+                  v-for="building in buildingStore.manualBuildings"
+                  :key="building.id"
+                  @click="selectAndShowDetails(building.id)"
+                  :class="{ active: building.id === buildingStore.selectedBuildingId }"
+                  class="building-item manual-building"
+              >
+                <span>{{ building.name }}</span>
+                <small>{{ building.width }}×{{ building.length }}×{{ building.height }}m ({{ building.floors }}层)</small>
+              </li>
+            </ul>
+            <div v-else class="empty-category">
+              <small>暂无自建楼体</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- 导入楼体分类 -->
+        <div class="category-section">
+          <div
+              class="category-header"
+              @click="toggleImportedBuildings"
+              :class="{ expanded: showImportedBuildings }"
+          >
+            <span class="category-icon">{{ showImportedBuildings ? '▼' : '▶' }}</span>
+            <span class="category-title">📦 导入楼体 ({{ buildingStore.importedBuildingsCount }})</span>
+          </div>
+
+          <div v-if="showImportedBuildings" class="category-content">
+            <ul v-if="buildingStore.importedBuildingsCount > 0">
+              <li
+                  v-for="building in buildingStore.importedBuildings"
+                  :key="building.id"
+                  @click="selectAndShowDetails(building.id)"
+                  :class="{ active: building.id === buildingStore.selectedBuildingId }"
+                  class="building-item imported-building"
+              >
+                <span>{{ building.name }}</span>
+                <small>{{ building.width }}×{{ building.length }}×{{ building.height }}m ({{ building.floors }}层)</small>
+                <div class="imported-badge">3D Tiles</div>
+              </li>
+            </ul>
+            <div v-else class="empty-category">
+              <small>暂无导入楼体</small>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 统计信息 -->
       <div class="stats" v-if="buildingStore.totalBuildings > 0">
-        <p>总楼体数：{{ buildingStore.totalBuildings }}</p>
+        <p>自建楼体：{{ buildingStore.manualBuildingsCount }}</p>
+        <p>导入楼体：{{ buildingStore.importedBuildingsCount }}</p>
         <p>总体积：{{ Math.round(buildingStore.totalBuildingVolume / 1000) }}k m³</p>
         <p>平均墙损：{{ buildingStore.averageWallLoss }}dB</p>
       </div>
@@ -299,7 +373,6 @@
     </div>
   </div>
 </template>
-
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useBuildingStore } from '../stores/buildings'
@@ -310,6 +383,11 @@ import type { Building, BuildingMaterialType } from '../types'
 
 const buildingStore = useBuildingStore()
 const materials = getAllBuildingMaterials()
+// 新增响应式数据
+const showManualBuildings = ref(true)      // 默认展开自建楼体
+const showImportedBuildings = ref(false)   // 默认折叠导入楼体
+const showImportResult = ref(false)        // 是否显示导入结果
+const importProgress = ref(0)              // 导入进度
 
 const selectedBuilding = computed(() => buildingStore.selectedBuilding)
 const showDetails = ref(false)
@@ -450,6 +528,58 @@ function duplicateBuilding() {
     detail: { building: newBuilding }
   }))
 }
+
+
+// 切换自建楼体显示
+function toggleManualBuildings() {
+  showManualBuildings.value = !showManualBuildings.value
+}
+
+//切换导入楼体显示
+function toggleImportedBuildings() {
+  showImportedBuildings.value = !showImportedBuildings.value
+}
+
+// 导入3D Tiles楼体
+async function importTilesBuildings() {
+  try {
+    showImportResult.value = false
+
+    const result = await buildingStore.importTilesBuildings()
+
+    // 显示导入结果
+    showImportResult.value = true
+
+    // 如果成功导入，展开导入楼体分类
+    if (result.success && result.importedCount > 0) {
+      showImportedBuildings.value = true
+    }
+
+    // 3秒后隐藏结果消息
+    setTimeout(() => {
+      showImportResult.value = false
+      buildingStore.clearImportStatus()
+    }, 3000)
+
+  } catch (error) {
+    console.error('导入楼体失败:', error)
+    showImportResult.value = true
+  }
+}
+
+// 获取导入结果消息
+function getImportResultMessage(): string {
+  const result = buildingStore.lastImportResult
+  if (!result) return ''
+
+  if (result.success) {
+    return `✅ 成功导入 ${result.importedCount} 个楼体`
+  } else {
+    return `❌ 导入失败: ${result.errors[0] || '未知错误'}`
+  }
+}
+
+
 </script>
 
 <!-- 使用与BaseStationPanel相同的样式 -->
@@ -997,5 +1127,194 @@ function duplicateBuilding() {
 
 .btn-duplicate:hover {
   background: #7B1FA2;
+}
+
+.import-section {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.btn-import {
+  width: 100%;
+  padding: 10px;
+  background: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+  margin-bottom: 10px;
+}
+
+.btn-import:hover:not(:disabled) {
+  background: #45a049;
+}
+
+.btn-import:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+}
+
+.import-progress {
+  margin-top: 8px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 4px;
+  background: #f0f0f0;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 5px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #4CAF50;
+  transition: width 0.3s ease;
+}
+
+.import-result {
+  margin-top: 8px;
+}
+
+.result-message {
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.result-message.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.result-message.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+/* 分类列表样式 */
+.building-categories {
+  margin-bottom: 20px;
+}
+
+.category-section {
+  margin-bottom: 15px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.category-header {
+  padding: 12px 15px;
+  background: #f8f9fa;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s;
+  user-select: none;
+}
+
+.category-header:hover {
+  background: #e9ecef;
+}
+
+.category-header.expanded {
+  background: #e3f2fd;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.category-icon {
+  font-size: 12px;
+  color: #666;
+  min-width: 12px;
+  transition: transform 0.2s;
+}
+
+.category-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+
+.category-content {
+  background: white;
+}
+
+.category-content ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.building-item {
+  padding: 10px 15px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background 0.2s;
+  position: relative;
+}
+
+.building-item:hover {
+  background: #f8f9fa;
+}
+
+.building-item:last-child {
+  border-bottom: none;
+}
+
+.building-item.active {
+  background: #e3f2fd;
+  border-left: 3px solid #2196f3;
+}
+
+.manual-building.active {
+  border-left-color: #4CAF50;
+}
+
+.imported-building.active {
+  border-left-color: #FF9800;
+}
+
+.building-item span {
+  display: block;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.building-item small {
+  display: block;
+  color: #666;
+  font-size: 11px;
+}
+
+.imported-badge {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: #FF9800;
+  color: white;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.empty-category {
+  padding: 20px 15px;
+  text-align: center;
+  color: #999;
+}
+
+.empty-category small {
+  font-style: italic;
 }
 </style>

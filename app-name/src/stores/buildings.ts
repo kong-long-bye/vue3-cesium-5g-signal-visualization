@@ -1,12 +1,17 @@
 import { defineStore } from 'pinia'
 import type { Building, BuildingMaterialType } from '../types'
 import { getBuildingMaterial } from '../utils/buildingMaterials'
+import { TilesImporter } from '../utils/3dTilesImporter'
+import type { TilesImportResult } from '../types'
 
 export const useBuildingStore = defineStore('buildings', {
     state: () => ({
         buildings: [] as Building[],           // 所有楼体数据
         selectedBuildingId: null as string | null,  // 当前选中的楼体ID
-        isCreatingBuilding: false              // 是否处于创建楼体模式
+        isCreatingBuilding: false,            // 是否处于创建楼体模式
+        isImporting: false,              // 是否正在导入
+        importProgress: 0,               // 导入进度
+        lastImportResult: null as TilesImportResult | null,  // 最后一次导入结果
     }),
 
     actions: {
@@ -20,10 +25,6 @@ export const useBuildingStore = defineStore('buildings', {
             this.isCreatingBuilding = mode
         },
 
-        // 添加新楼体
-        addBuilding(building: Building) {
-            this.buildings.push(building)
-        },
 
         // 选中指定楼体
         selectBuilding(id: string) {
@@ -92,7 +93,72 @@ export const useBuildingStore = defineStore('buildings', {
                     color: material.color
                 })
             }
-        }
+        },
+
+
+
+        // 导入3D Tiles楼体
+        async importTilesBuildings(): Promise<TilesImportResult> {
+            this.isImporting = true
+            this.importProgress = 0
+
+            try {
+                console.log('开始导入3D Tiles楼体...')
+
+                const result = await TilesImporter.importTilesFolders()
+                this.lastImportResult = result
+
+                if (result.success && result.buildings.length > 0) {
+                    // 添加导入的楼体到store
+                    result.buildings.forEach(building => {
+                        this.buildings.push(building)
+                    })
+
+                    console.log(`成功导入 ${result.importedCount} 个楼体`)
+
+                    // 触发地图更新事件
+                    window.dispatchEvent(new CustomEvent('reloadBuildingsOnMap', {
+                        detail: { buildings: this.buildings }
+                    }))
+                }
+
+                return result
+
+            } catch (error) {
+                console.error('导入3D Tiles楼体失败:', error)
+                const errorResult: TilesImportResult = {
+                    success: false,
+                    importedCount: 0,
+                    failedCount: 1,
+                    buildings: [],
+                    errors: [error.message]
+                }
+                this.lastImportResult = errorResult
+                return errorResult
+
+            } finally {
+                this.isImporting = false
+                this.importProgress = 100
+            }
+        },
+
+        // 清除导入状态
+        clearImportStatus() {
+            this.isImporting = false
+            this.importProgress = 0
+            this.lastImportResult = null
+        },
+
+        addBuilding(building: Building) {
+            // 确保手动创建的楼体有正确的sourceType
+            if (!building.sourceType) {
+                building.sourceType = 'manual'
+            }
+
+            console.log('🏗️ Adding building to store:', building.name, 'sourceType:', building.sourceType)
+            this.buildings.push(building)
+            console.log('📊 Store状态 - 总楼体:', this.buildings.length, '手动楼体:', this.buildings.filter(b => b.sourceType === 'manual').length)
+        },
     },
 
     getters: {
@@ -131,6 +197,26 @@ export const useBuildingStore = defineStore('buildings', {
 
             const totalLoss = state.buildings.reduce((sum, building) => sum + building.wallLoss, 0)
             return Math.round((totalLoss / state.buildings.length) * 100) / 100
-        }
+        },
+
+        // 手动创建的楼体
+        manualBuildings(state): Building[] {
+            return state.buildings.filter(b => b.sourceType === 'manual')
+        },
+
+        // 导入的楼体
+        importedBuildings(state): Building[] {
+            return state.buildings.filter(b => b.sourceType === 'imported')
+        },
+
+        // 手动创建楼体数量
+        manualBuildingsCount(state): number {
+            return state.buildings.filter(b => b.sourceType === 'manual').length
+        },
+
+        // 导入楼体数量
+        importedBuildingsCount(state): number {
+            return state.buildings.filter(b => b.sourceType === 'imported').length
+        },
     }
 })
