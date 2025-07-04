@@ -200,9 +200,11 @@ function createBuilding(lon: number, lat: number) {
   buildingStore.setBuildingCreationMode(false) // 创建后退出创建模式
 }
 
+
 // 在地图上添加楼体
 function addBuildingToMap(building: Building) {
   if (building.sourceType === 'imported' && building.tilesetInfo) {
+
     addTilesetToMap(building)
   } else {
     // 原有的Box渲染逻辑保持不变
@@ -211,12 +213,13 @@ function addBuildingToMap(building: Building) {
 
 }
 // 新增：添加3D Tiles楼体到地图
-function addTilesetToMap(building: Building) {
+async function addTilesetToMap(building: Building) {
   if (!building.tilesetInfo || !building.originalPath) return
 
   try {
     // 构建tileset URL（这里需要根据实际情况调整）
-    const tilesetUrl = `./3dtitlebuilding/${building.originalPath}/tileset.json`
+    const tilesetUrl = `/3dtitlebuilding/${building.originalPath}/tileset.json`
+
 
     // 创建3D Tileset
     const tileset = viewer.scene.primitives.add(
@@ -237,7 +240,7 @@ function addTilesetToMap(building: Building) {
     // 存储tileset引用
     tilesetMap.set(building.id, tileset)
 
-    // 设置tileset属性
+    //设置tileset属性
     tileset.readyPromise.then(() => {
       console.log(`3D Tileset ${building.name} 加载完成`)
 
@@ -255,7 +258,7 @@ function addTilesetToMap(building: Building) {
       addBoxBuildingToMap(building)
     })
 
-    // 添加标签
+    //添加标签
     viewer.entities.add({
       id: `${building.id}_label`,
       position: Cesium.Cartesian3.fromDegrees(
@@ -319,184 +322,207 @@ function addBoxBuildingToMap(building: Building) {
 }
 
 
-onMounted(() => {
-  if (!cesiumContainer.value) return
+onMounted(async () => {
+      if (!cesiumContainer.value) return
 
-  // 初始化Cesium场景
-   viewer = new Cesium.Viewer(cesiumContainer.value, {
+      Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlMWY2MDczNi00NjRlLTRkOWEtYWI0ZC05MzdjNGY1YmYzMmQiLCJpZCI6MzA3NDE4LCJpYXQiOjE3NDg1MTA2NjR9.wu0g_HLWWoPqgC6nrStoXVoSEql8QAQSuSTB2wmweRs'
+      // 初始化Cesium场景
+      viewer = new Cesium.Viewer(cesiumContainer.value, {
 
-  })
+        baseLayerPicker: false,
+        //terrain: Cesium.Terrain.fromWorldTerrain()
 
+
+      });
+
+      // 添加高德卫星图（底图）
+      const satelliteLayer = new Cesium.UrlTemplateImageryProvider({
+        url: 'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
+        subdomains: ['1', '2', '3', '4'],
+        tilingScheme: new Cesium.WebMercatorTilingScheme(),
+        maximumLevel: 18
+      });
+      viewer.imageryLayers.addImageryProvider(satelliteLayer);
+
+      // 添加高德标注图（覆盖层）
+      const labelLayer = new Cesium.UrlTemplateImageryProvider({
+        url: 'https://webst0{s}.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}',
+        subdomains: ['1', '2', '3', '4'],
+        tilingScheme: new Cesium.WebMercatorTilingScheme(),
+        maximumLevel: 18
+      });
+      viewer.imageryLayers.addImageryProvider(labelLayer);
 
       const geometricRayVisualization = new AntennaRayVisualization(viewer)
       const threeJSRayTracingManager = new ThreeJSRayTracingManager(viewer)
 
       // 设置默认视角到重庆市
-  viewer.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(106.6148619 , 29.5391032, 200), // 重庆坐标，高度50km
-    orientation: {
-      heading: Cesium.Math.toRadians(0),     // 正北方向
-      pitch: Cesium.Math.toRadians(-30),     // 俯视角度45度
-      roll: 0.0
-    }
-  })
-  // 处理地图点击事件 - 添加基站
-  viewer.screenSpaceEventHandler.setInputAction((event:any) => {
-
-
-    const cartesian = viewer.scene.pickPosition(event.position)
-    if (!cartesian) return
-
-    // 转换为经纬度坐标
-    const carto = Cesium.Cartographic.fromCartesian(cartesian)
-    const lon = Cesium.Math.toDegrees(carto.longitude)
-    const lat = Cesium.Math.toDegrees(carto.latitude)
-
-    const id = nanoid()
-    const defaultHeight = 30 // 默认基站高度30米
-
-
-    // 检查是否处于楼体创建模式
-    if (buildingStore.isCreatingBuilding) {
-      createBuilding(lon, lat)
-      return
-    }
-    // 检查是否处于宏站创建模式
-    if (!store.isCreatingMode) return
-    // 在3D地图中添加基站图标和标签
-    viewer.entities.add({
-      id,
-      position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
-      billboard: {
-        image: '/station-icon1.png',
-        scale: 0.1,
-        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
-      },
-      label: {
-        text: `宏站-${id.slice(0, 4)}\n高度: ${defaultHeight}m`,
-        font: '12px sans-serif',
-        pixelOffset: new Cesium.Cartesian2(0, -40),
-        fillColor: Cesium.Color.WHITE,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 2,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE
-      }
-    })
-
-    // 添加基站支撑杆（从地面到基站的线条）
-    viewer.entities.add({
-      id: `${id}_pole`,
-      polyline: {
-        positions: [
-          Cesium.Cartesian3.fromDegrees(lon, lat, 0),
-          Cesium.Cartesian3.fromDegrees(lon, lat, defaultHeight)
-        ],
-        width: 3,
-        material: Cesium.Color.GRAY.withAlpha(0.8),
-        clampToGround: false
-      }
-    })
-
-    // 保存基站数据到store
-    store.addStation({
-      id,
-      name: `宏站-${id.slice(0, 4)}`,
-      longitude: lon,
-      latitude: lat,
-      height: defaultHeight,
-      antennas: []
-    })
-
-    store.selectStation(id)
-
-  }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
-
-
-  // ========== 新增：射线追踪模式切换事件 ==========
-  window.addEventListener('updateRayTracingMode', (event: any) => {
-    const { stationId, antennaId, antenna } = event.detail
-    const station = store.stations.find(s => s.id === stationId)
-    console.log('更新射线追踪模式', antenna.rayTracingType)
-    if (station && antenna) {
-      // 清除所有射线追踪显示
-      geometricRayVisualization.clearAntenna(antennaId)
-
-      threeJSRayTracingManager.clearAntenna(antennaId)
-
-      // 根据选择的模式启用对应的射线追踪
-      switch (antenna.rayTracingType) {
-        case 'geometric':
-          if (antenna.visualization.enabled) {
-            geometricRayVisualization.renderAntenna(station, antenna)
-          }
-          break
-
-        case 'threejs':
-          if (antenna.threeJSRayTracing.enabled) {
-            threeJSRayTracingManager.enable(antenna.threeJSRayTracing)
-            threeJSRayTracingManager.renderAntenna(station, antenna)
-          }
-          break
-
-
-      }
-    }
-  })
-      // 添加右键点击事件 - 信号强度查询
-  viewer.screenSpaceEventHandler.setInputAction((event:any) => {
-    const cartesian = viewer.scene.pickPosition(event.position)
-    if (!cartesian) return
-
-    // 转换为经纬度坐标
-    const carto = Cesium.Cartographic.fromCartesian(cartesian)
-    const lon = Cesium.Math.toDegrees(carto.longitude)
-    const lat = Cesium.Math.toDegrees(carto.latitude)
-    const height = 1.5 // 默认接收点高度1.5米
-
-    // 计算所有基站天线的信号强度
-    const signalResults = calculateBestSignal(store.stations, lat, lon, height,viewer)
-
-    if (signalResults.length === 0) {
-      showInfoWindow(lon, lat, '没有可用的基站信号')
-      return
-    }
-
-    // 显示信号强度查询结果
-    showSignalStrengthInfo(lon, lat, height, signalResults)
-
-  }, Cesium.ScreenSpaceEventType.RIGHT_CLICK)
-  // 监听基站数据变化，实时更新3D显示
-  watch(() => store.stations, (newStations) => {
-    newStations.forEach(station => {
-      const entity = viewer.entities.getById(station.id)
-      const poleEntity = viewer.entities.getById(`${station.id}_pole`)
-
-      if (entity) {
-        // 更新基站位置和标签
-        entity.position = new Cesium.ConstantPositionProperty(
-            Cesium.Cartesian3.fromDegrees(
-                station.longitude,
-                station.latitude,
-                station.height
-            )
-        )
-
-        if (entity.label) {
-          entity.label.text = new Cesium.ConstantProperty(`${station.name}\n高度: ${station.height}m`)
+      viewer.camera.setView({
+        destination: Cesium.Cartesian3.fromDegrees(106.6148619, 29.5391032, 200), // 重庆坐标，高度50km
+        orientation: {
+          heading: Cesium.Math.toRadians(0),     // 正北方向
+          pitch: Cesium.Math.toRadians(-30),     // 俯视角度45度
+          roll: 0.0
         }
-      }
+      })
+      // 处理地图点击事件 - 添加基站
+      viewer.screenSpaceEventHandler.setInputAction((event: any) => {
 
-      // 更新支撑杆
-      if (poleEntity && poleEntity.polyline) {
-        poleEntity.polyline.positions = new Cesium.ConstantProperty([
-          Cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, 0),
-          Cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, station.height)
-        ])
-      }
-    })
-  }, { deep: true })
-  //监听监听楼体数据变化，实时更新3D显示
+
+        const cartesian = viewer.scene.pickPosition(event.position)
+        if (!cartesian) return
+
+        // 转换为经纬度坐标
+        const carto = Cesium.Cartographic.fromCartesian(cartesian)
+        const lon = Cesium.Math.toDegrees(carto.longitude)
+        const lat = Cesium.Math.toDegrees(carto.latitude)
+
+        const id = nanoid()
+        const defaultHeight = 30 // 默认基站高度30米
+
+
+        // 检查是否处于楼体创建模式
+        if (buildingStore.isCreatingBuilding) {
+          createBuilding(lon, lat)
+          return
+        }
+        // 检查是否处于宏站创建模式
+        if (!store.isCreatingMode) return
+        // 在3D地图中添加基站图标和标签
+        viewer.entities.add({
+          id,
+          position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+          billboard: {
+            image: '/station-icon1.png',
+            scale: 0.1,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+          },
+          label: {
+            text: `宏站-${id.slice(0, 4)}\n高度: ${defaultHeight}m`,
+            font: '12px sans-serif',
+            pixelOffset: new Cesium.Cartesian2(0, -40),
+            fillColor: Cesium.Color.WHITE,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE
+
+          }
+        })
+
+        // 添加基站支撑杆（从地面到基站的线条）
+        viewer.entities.add({
+          id: `${id}_pole`,
+          polyline: {
+            positions: [
+              Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+              Cesium.Cartesian3.fromDegrees(lon, lat, defaultHeight)
+            ],
+            width: 3,
+            material: Cesium.Color.GRAY.withAlpha(0.8),
+            clampToGround: false
+          }
+        })
+
+        // 保存基站数据到store
+        store.addStation({
+          id,
+          name: `宏站-${id.slice(0, 4)}`,
+          longitude: lon,
+          latitude: lat,
+          height: defaultHeight,
+          antennas: []
+        })
+
+        store.selectStation(id)
+
+      }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
+
+
+      // ========== 新增：射线追踪模式切换事件 ==========
+      window.addEventListener('updateRayTracingMode', (event: any) => {
+        const {stationId, antennaId, antenna} = event.detail
+        const station = store.stations.find(s => s.id === stationId)
+        console.log('更新射线追踪模式', antenna.rayTracingType)
+        if (station && antenna) {
+          // 清除所有射线追踪显示
+          geometricRayVisualization.clearAntenna(antennaId)
+
+          threeJSRayTracingManager.clearAntenna(antennaId)
+
+          // 根据选择的模式启用对应的射线追踪
+          switch (antenna.rayTracingType) {
+            case 'geometric':
+              if (antenna.visualization.enabled) {
+                geometricRayVisualization.renderAntenna(station, antenna)
+              }
+              break
+
+            case 'threejs':
+              if (antenna.threeJSRayTracing.enabled) {
+                threeJSRayTracingManager.enable(antenna.threeJSRayTracing)
+                threeJSRayTracingManager.renderAntenna(station, antenna)
+              }
+              break
+
+
+          }
+        }
+      })
+      // 添加右键点击事件 - 信号强度查询
+      viewer.screenSpaceEventHandler.setInputAction((event: any) => {
+        const cartesian = viewer.scene.pickPosition(event.position)
+        if (!cartesian) return
+
+        // 转换为经纬度坐标
+        const carto = Cesium.Cartographic.fromCartesian(cartesian)
+        const lon = Cesium.Math.toDegrees(carto.longitude)
+        const lat = Cesium.Math.toDegrees(carto.latitude)
+        const height = 1.5 // 默认接收点高度1.5米
+
+        // 计算所有基站天线的信号强度
+        const signalResults = calculateBestSignal(store.stations, lat, lon, height, viewer)
+
+        if (signalResults.length === 0) {
+          showInfoWindow(lon, lat, '没有可用的基站信号')
+          return
+        }
+
+        // 显示信号强度查询结果
+        showSignalStrengthInfo(lon, lat, height, signalResults)
+
+      }, Cesium.ScreenSpaceEventType.RIGHT_CLICK)
+      // 监听基站数据变化，实时更新3D显示
+      watch(() => store.stations, (newStations) => {
+        newStations.forEach(station => {
+          const entity = viewer.entities.getById(station.id)
+          const poleEntity = viewer.entities.getById(`${station.id}_pole`)
+
+          if (entity) {
+            // 更新基站位置和标签
+            entity.position = new Cesium.ConstantPositionProperty(
+                Cesium.Cartesian3.fromDegrees(
+                    station.longitude,
+                    station.latitude,
+                    station.height
+                )
+            )
+
+            if (entity.label) {
+              entity.label.text = new Cesium.ConstantProperty(`${station.name}\n高度: ${station.height}m`)
+            }
+          }
+
+          // 更新支撑杆
+          if (poleEntity && poleEntity.polyline) {
+            poleEntity.polyline.positions = new Cesium.ConstantProperty([
+              Cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, 0),
+              Cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, station.height)
+            ])
+          }
+        })
+      }, {deep: true})
+      //监听监听楼体数据变化，实时更新3D显示
       watch(() => buildingStore.buildings, (newBuildings) => {
         console.log('楼体数据变化，更新地图显示')
 
@@ -517,6 +543,7 @@ onMounted(() => {
             } else {
               // 如果tileset不存在，重新创建
               addTilesetToMap(building)
+              //loadTileset(building)
             }
 
             // 更新标签
@@ -537,7 +564,7 @@ onMounted(() => {
 
               // 更新楼体位置
               entity.position = new Cesium.ConstantPositionProperty(
-                  Cesium.Cartesian3.fromDegrees(building.longitude, building.latitude, building.height/2)
+                  Cesium.Cartesian3.fromDegrees(building.longitude, building.latitude, building.height / 2)
               )
 
               // 更新楼体尺寸
@@ -560,7 +587,7 @@ onMounted(() => {
                     `${building.name}\n${building.width}×${building.length}×${building.height}m\n${building.floors}层`
                 )
                 entity.label.pixelOffset = new Cesium.ConstantProperty(
-                    new Cesium.Cartesian2(0, -building.height/2 - 30)
+                    new Cesium.Cartesian2(0, -building.height / 2 - 30)
                 )
               }
 
@@ -569,7 +596,7 @@ onMounted(() => {
                 const heading = Cesium.Math.toRadians(building.rotation)
                 const hpr = new Cesium.HeadingPitchRoll(heading, 0, 0)
                 const orientation = Cesium.Transforms.headingPitchRollQuaternion(
-                    Cesium.Cartesian3.fromDegrees(building.longitude, building.latitude, building.height/2),
+                    Cesium.Cartesian3.fromDegrees(building.longitude, building.latitude, building.height / 2),
                     hpr
                 )
                 entity.orientation = new Cesium.ConstantProperty(orientation)
@@ -579,70 +606,70 @@ onMounted(() => {
             }
           }
         })
-      }, { deep: true })
+      }, {deep: true})
 
 
-  // 4. 修复：监听删除楼体事件
-  window.addEventListener('removeBuildingFromMap', (event:any) => {
-    const { buildingId, building } = event.detail
-    console.log('删除楼体事件:', buildingId, building?.name)
+      // 4. 修复：监听删除楼体事件
+      window.addEventListener('removeBuildingFromMap', (event: any) => {
+        const {buildingId, building} = event.detail
+        console.log('删除楼体事件:', buildingId, building?.name)
 
-    const entity = viewer.entities.getById(buildingId)
-    if (entity) {
-      viewer.entities.remove(entity)
-      console.log('楼体已从地图删除:', buildingId)
-    } else {
-      console.warn('要删除的楼体不存在:', buildingId)
-    }
-  })
-// 5. 修复：监听楼体更新事件
-  window.addEventListener('updateBuildingOnMap', (event:any) => {
-    const { buildingId, building } = event.detail
-    console.log('更新楼体事件:', buildingId, building?.name)
-
-    // 移除旧的实体
-    const oldEntity = viewer.entities.getById(buildingId)
-    if (oldEntity) {
-      viewer.entities.remove(oldEntity)
-    }
-
-    // 添加新的实体
-    addBuildingToMap(building)
-  })
-      // 监听删除基站事件
-  window.addEventListener('removeStationFromMap', (event: any) => {
-    const { stationId,station } = event.detail
-    const entity = viewer.entities.getById(stationId)
-    const poleEntity = viewer.entities.getById(`${stationId}_pole`)
-
-    console.log(station)
-    // 清除该基站所有天线的射线可视化
-    if (station) {
-      station.antennas.forEach(antenna => {
-        geometricRayVisualization.clearAntenna(antenna.id)
-
-        threeJSRayTracingManager.clearAntenna(antenna.id)  // 新增Three.js清除
+        const entity = viewer.entities.getById(buildingId)
+        if (entity) {
+          viewer.entities.remove(entity)
+          console.log('楼体已从地图删除:', buildingId)
+        } else {
+          console.warn('要删除的楼体不存在:', buildingId)
+        }
       })
-    }
-    if (entity) viewer.entities.remove(entity)
-    if (poleEntity) viewer.entities.remove(poleEntity)
-  })
+// 5. 修复：监听楼体更新事件
+      window.addEventListener('updateBuildingOnMap', (event: any) => {
+        const {buildingId, building} = event.detail
+        console.log('更新楼体事件:', buildingId, building?.name)
 
-  // 监听飞行到基站事件
-  window.addEventListener('flyToStation', (event: any) => {
-    const { longitude, latitude, height } = event.detail
-    viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, height + 200),
-      orientation: {
-        heading: Cesium.Math.toRadians(0),
-        pitch: Cesium.Math.toRadians(-30),
-        roll: 0.0
-      },
-      duration: 2.0
-    })
-  })
-  // 修复：监听飞行到楼体事件 - 增加调试信息
-  window.addEventListener('flyToBuilding', (event:any) => {
+        // 移除旧的实体
+        const oldEntity = viewer.entities.getById(buildingId)
+        if (oldEntity) {
+          viewer.entities.remove(oldEntity)
+        }
+
+        // 添加新的实体
+        addBuildingToMap(building)
+      })
+      // 监听删除基站事件
+      window.addEventListener('removeStationFromMap', (event: any) => {
+        const {stationId, station} = event.detail
+        const entity = viewer.entities.getById(stationId)
+        const poleEntity = viewer.entities.getById(`${stationId}_pole`)
+
+        console.log(station)
+        // 清除该基站所有天线的射线可视化
+        if (station) {
+          station.antennas.forEach(antenna => {
+            geometricRayVisualization.clearAntenna(antenna.id)
+
+            threeJSRayTracingManager.clearAntenna(antenna.id)  // 新增Three.js清除
+          })
+        }
+        if (entity) viewer.entities.remove(entity)
+        if (poleEntity) viewer.entities.remove(poleEntity)
+      })
+
+      // 监听飞行到基站事件
+      window.addEventListener('flyToStation', (event: any) => {
+        const {longitude, latitude, height} = event.detail
+        viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, height + 200),
+          orientation: {
+            heading: Cesium.Math.toRadians(0),
+            pitch: Cesium.Math.toRadians(-30),
+            roll: 0.0
+          },
+          duration: 2.0
+        })
+      })
+      // 修复：监听飞行到楼体事件 - 增加调试信息
+      window.addEventListener('flyToBuilding', (event: any) => {
         console.log('收到飞行到楼体事件:', event)
         console.log('Event detail:', event.detail)
 
@@ -651,7 +678,7 @@ onMounted(() => {
           return
         }
 
-        const { buildingId, building, longitude, latitude, height, orientation } = event.detail
+        const {buildingId, building, longitude, latitude, height, orientation} = event.detail
         console.log('飞行到楼体事件详情:', {
           buildingId,
           buildingName: building?.name,
@@ -661,7 +688,7 @@ onMounted(() => {
         })
 
         if (longitude === undefined || latitude === undefined || height === undefined) {
-          console.error('飞行坐标数据不完整:', { longitude, latitude, height })
+          console.error('飞行坐标数据不完整:', {longitude, latitude, height})
           return
         }
 
@@ -679,167 +706,167 @@ onMounted(() => {
       })
 
       //修复：监听添加楼体到地图事件（用于复制功能）
-  window.addEventListener('addBuildingToMap', (event:any) => {
-    const { building } = event.detail
-    console.log('添加楼体到地图事件:', building?.name)
-    addBuildingToMap(building)
-  })
+      window.addEventListener('addBuildingToMap', (event: any) => {
+        const {building} = event.detail
+        console.log('添加楼体到地图事件:', building?.name)
+        addBuildingToMap(building)
+      })
 
-  // 监听清空所有基站事件
-  window.addEventListener('clearAllStationsFromMap', () => {
-    geometricRayVisualization.clearAll()
+      // 监听清空所有基站事件
+      window.addEventListener('clearAllStationsFromMap', () => {
+        geometricRayVisualization.clearAll()
 
-    threeJSRayTracingManager.clearAll()
-    viewer.entities.removeAll()
-  })
+        threeJSRayTracingManager.clearAll()
+        viewer.entities.removeAll()
+      })
 // 修复：监听清空所有楼体事件 - 增加调试信息
-  window.addEventListener('clearAllBuildingsFromMap', (event) => {
-    console.log('收到清空所有楼体事件:', event)
+      window.addEventListener('clearAllBuildingsFromMap', (event) => {
+        console.log('收到清空所有楼体事件:', event)
 
-    // 移除所有楼体实体（通过box属性识别）
-    const buildingEntities: Cesium.Entity[] = []
-    viewer.entities.values.forEach(entity => {
-      if (entity.box) { // 识别楼体实体（有box属性）
-        buildingEntities.push(entity)
-      }
-    })
+        // 移除所有楼体实体（通过box属性识别）
+        const buildingEntities: Cesium.Entity[] = []
+        viewer.entities.values.forEach(entity => {
+          if (entity.box) { // 识别楼体实体（有box属性）
+            buildingEntities.push(entity)
+          }
+        })
 
-    console.log(`找到 ${buildingEntities.length} 个楼体实体待删除`)
+        console.log(`找到 ${buildingEntities.length} 个楼体实体待删除`)
 
-    buildingEntities.forEach((entity, index) => {
-      console.log(`删除楼体实体 ${index + 1}:`, entity.id)
-      viewer.entities.remove(entity)
-    })
+        buildingEntities.forEach((entity, index) => {
+          console.log(`删除楼体实体 ${index + 1}:`, entity.id)
+          viewer.entities.remove(entity)
+        })
 
-    console.log(`✅ 已清空 ${buildingEntities.length} 个楼体`)
-  })
+        console.log(`✅ 已清空 ${buildingEntities.length} 个楼体`)
+      })
 
 // 修复：监听添加楼体到地图事件 - 增加调试信息
-  window.addEventListener('addBuildingToMap', (event:any) => {
-    console.log('收到添加楼体到地图事件:', event)
-    console.log('Event detail:', event.detail)
+      window.addEventListener('addBuildingToMap', (event: any) => {
+        console.log('收到添加楼体到地图事件:', event)
+        console.log('Event detail:', event.detail)
 
-    if (!event.detail) {
-      console.error('添加楼体事件detail为空!')
-      return
-    }
-
-    const { building } = event.detail
-    if (!building) {
-      console.error('添加楼体事件中building为空!')
-      return
-    }
-
-    console.log('添加楼体到地图:', building.name, building.id)
-    addBuildingToMap(building)
-  })
-  // 监听重新加载基站事件（用于数据导入）
-  window.addEventListener('reloadStationsOnMap', (event: any) => {
-    const { stations } = event.detail
-    geometricRayVisualization.clearAll()
-
-    threeJSRayTracingManager.clearAll()
-    viewer.entities.removeAll()
-
-    stations.forEach((station: any) => {
-      // 重新添加基站实体
-      viewer.entities.add({
-        id: station.id,
-        position: Cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, station.height),
-        billboard: {
-          image: '/station-icon.png',
-          scale: 0.6,
-          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          heightReference: Cesium.HeightReference.NONE
-        },
-        label: {
-          text: `${station.name}\n高度: ${station.height}m`,
-          font: '12px sans-serif',
-          pixelOffset: new Cesium.Cartesian2(0, -40),
-          fillColor: Cesium.Color.WHITE,
-          outlineColor: Cesium.Color.BLACK,
-          outlineWidth: 2,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE
+        if (!event.detail) {
+          console.error('添加楼体事件detail为空!')
+          return
         }
-      })
 
-      // 重新添加支撑杆
-      viewer.entities.add({
-        id: `${station.id}_pole`,
-        polyline: {
-          positions: [
-            Cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, 0),
-            Cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, station.height)
-          ],
-          width: 3,
-          material: Cesium.Color.GRAY.withAlpha(0.8),
-          clampToGround: false
+        const {building} = event.detail
+        if (!building) {
+          console.error('添加楼体事件中building为空!')
+          return
         }
-      })
-      // 重新渲染启用的天线射线
-      station.antennas.forEach((antenna: any) => {
-        if (antenna.visualization?.enabled) {
-          geometricRayVisualization.renderAntenna(station, antenna)
-        }
-      })
-    })
-  })
-  // ========== 修改：现有的天线可视化更新事件，支持多种模式
-  window.addEventListener('updateAntennaVisualization', (event: any) => {
-    const { stationId, antennaId, antenna } = event.detail
-    const station = store.stations.find(s => s.id === stationId)
 
-    if (station && antenna) {
+        console.log('添加楼体到地图:', building.name, building.id)
+        addBuildingToMap(building)
+      })
+      // 监听重新加载基站事件（用于数据导入）
+      window.addEventListener('reloadStationsOnMap', (event: any) => {
+        const {stations} = event.detail
+        geometricRayVisualization.clearAll()
 
-      // 根据当前射线追踪类型更新相应的可视化
-      switch (antenna.rayTracingType) {
-        case 'geometric':
-          if (antenna.visualization.enabled) {
-            geometricRayVisualization.renderAntenna(station, antenna)
-          } else {
-            geometricRayVisualization.clearAntenna(antennaId)
+        threeJSRayTracingManager.clearAll()
+        viewer.entities.removeAll()
+
+        stations.forEach((station: any) => {
+          // 重新添加基站实体
+          viewer.entities.add({
+            id: station.id,
+            position: Cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, station.height),
+            billboard: {
+              image: '/station-icon.png',
+              scale: 0.6,
+              verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+              heightReference: Cesium.HeightReference.NONE
+            },
+            label: {
+              text: `${station.name}\n高度: ${station.height}m`,
+              font: '12px sans-serif',
+              pixelOffset: new Cesium.Cartesian2(0, -40),
+              fillColor: Cesium.Color.WHITE,
+              outlineColor: Cesium.Color.BLACK,
+              outlineWidth: 2,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE
+            }
+          })
+
+          // 重新添加支撑杆
+          viewer.entities.add({
+            id: `${station.id}_pole`,
+            polyline: {
+              positions: [
+                Cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, 0),
+                Cesium.Cartesian3.fromDegrees(station.longitude, station.latitude, station.height)
+              ],
+              width: 3,
+              material: Cesium.Color.GRAY.withAlpha(0.8),
+              clampToGround: false
+            }
+          })
+          // 重新渲染启用的天线射线
+          station.antennas.forEach((antenna: any) => {
+            if (antenna.visualization?.enabled) {
+              geometricRayVisualization.renderAntenna(station, antenna)
+            }
+          })
+        })
+      })
+      // ========== 修改：现有的天线可视化更新事件，支持多种模式
+      window.addEventListener('updateAntennaVisualization', (event: any) => {
+        const {stationId, antennaId, antenna} = event.detail
+        const station = store.stations.find(s => s.id === stationId)
+
+        if (station && antenna) {
+
+          // 根据当前射线追踪类型更新相应的可视化
+          switch (antenna.rayTracingType) {
+            case 'geometric':
+              if (antenna.visualization.enabled) {
+                geometricRayVisualization.renderAntenna(station, antenna)
+              } else {
+                geometricRayVisualization.clearAntenna(antennaId)
+              }
+              break
+
+            case 'threejs':
+              if (antenna.threeJSRayTracing.enabled) {
+                console.log('更新天线可视化', antennaId, antenna.rayTracingType, antenna.threeJSRayTracing.enabled)
+                threeJSRayTracingManager.renderAntenna(station, antenna)
+              } else {
+                threeJSRayTracingManager.clearAntenna(antennaId)
+              }
+              break
+
+
           }
-          break
-
-        case 'threejs':
-          if (antenna.threeJSRayTracing.enabled) {
-            console.log('更新天线可视化', antennaId, antenna.rayTracingType, antenna.threeJSRayTracing.enabled)
-            threeJSRayTracingManager.renderAntenna(station, antenna)
-          } else {
-            threeJSRayTracingManager.clearAntenna(antennaId)
-          }
-          break
-
-
-      }
-    }
-  })
+        }
+      })
 // 监听基站位置更新事件
-  window.addEventListener('updateStationPosition', (event: any) => {
-    const { stationId, longitude, latitude, height } = event.detail
-    const entity = viewer.entities.getById(stationId)
-    const poleEntity = viewer.entities.getById(`${stationId}_pole`)
+      window.addEventListener('updateStationPosition', (event: any) => {
+        const {stationId, longitude, latitude, height} = event.detail
+        const entity = viewer.entities.getById(stationId)
+        const poleEntity = viewer.entities.getById(`${stationId}_pole`)
 
-    if (entity) {
-      // 更新基站位置
-      entity.position =new Cesium.ConstantPositionProperty (Cesium.Cartesian3.fromDegrees(longitude, latitude, height))
-    }
+        if (entity) {
+          // 更新基站位置
+          entity.position = new Cesium.ConstantPositionProperty(Cesium.Cartesian3.fromDegrees(longitude, latitude, height))
+        }
 
-    if (poleEntity && poleEntity.polyline) {
-      // 更新支撑杆位置
-      poleEntity.polyline.positions =new Cesium.ConstantProperty ([
-        Cesium.Cartesian3.fromDegrees(longitude, latitude, 0),
-        Cesium.Cartesian3.fromDegrees(longitude, latitude, height)
-      ])
+        if (poleEntity && poleEntity.polyline) {
+          // 更新支撑杆位置
+          poleEntity.polyline.positions = new Cesium.ConstantProperty([
+            Cesium.Cartesian3.fromDegrees(longitude, latitude, 0),
+            Cesium.Cartesian3.fromDegrees(longitude, latitude, height)
+          ])
+        }
+      })
+      // 监听删除天线可视化事件
+      window.addEventListener('removeAntennaVisualization', (event: any) => {
+        const {antennaId} = event.detail
+        geometricRayVisualization.clearAntenna(antennaId)
+        threeJSRayTracingManager.clearAntenna(antennaId)
+      })
     }
-  })
-  // 监听删除天线可视化事件
-  window.addEventListener('removeAntennaVisualization', (event: any) => {
-    const { antennaId } = event.detail
-    geometricRayVisualization.clearAntenna(antennaId)
-    threeJSRayTracingManager.clearAntenna(antennaId)
-  })
-}
 )
 
 

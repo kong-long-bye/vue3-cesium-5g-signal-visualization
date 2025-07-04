@@ -74,13 +74,13 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import {onMounted, ref} from 'vue'
 import { useBaseStationStore } from './stores/baseStations'
 import { useBuildingStore } from './stores/buildings'
 import CesiumViewer from './components/CesiumViewer.vue'
 import BaseStationPanel from './components/BaseStationPanel.vue'
 import BuildingPanel from './components/BuildingPanel.vue'
-
+import { TilesLoader } from './utils/3dTilesLoader'
 const store = useBaseStationStore()
 const buildingStore = useBuildingStore()
 
@@ -102,6 +102,26 @@ function exitCreationMode() {
   store.setCreatingMode(false)
   buildingStore.setBuildingCreationMode(false)
 }
+
+onMounted(async () => {
+  try {
+    console.log('🚀 应用启动，自动加载本地3D Tiles...')
+
+    const buildings = await TilesLoader.loadAll3DTiles()
+
+    if (buildings.length > 0) {
+      buildings.forEach(building => {
+        buildingStore.addBuilding(building)
+      })
+      console.log(`🎉 自动加载了 ${buildings.length} 个3D Tiles楼体`)
+    } else {
+      console.log('📂 未发现本地3D Tiles文件')
+    }
+
+  } catch (error) {
+    console.error('❌ 自动加载3D Tiles失败:', error)
+  }
+})
 </script>
 
 <style scoped>

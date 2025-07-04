@@ -171,3 +171,11 @@ export interface TilesImportResult {
 
 
 
+
+declare global {
+    interface Window {
+        showDirectoryPicker(options?: { mode?: ReadWrite; id?: string }): Promise<FileSystemDirectoryHandle>;
+    }
+}
+
+type ReadWrite = 'read' | 'readwrite';
